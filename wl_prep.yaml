@@ -1,0 +1,37 @@
+- name: LOCAL
+  hosts: localhost
+  gather_facts: no
+  tasks:
+    - name: file exists
+      file:
+        path: "/home/flow/.ssh/id_ed25519"
+
+
+- name: Deploy stuff
+  hosts:
+    - minikube-02
+    - minikube-03
+  become: yes
+  vars:
+    wl_home: /home/wluser
+    wl_user: wluser
+  tasks: 
+
+    - name: Ensure correct ownership of weblogic home (optional, recursive)
+      file:
+        path: "{{ wl_home }}"
+        owner: "{{ wl_user }}"
+        group: "{{ wl_user }}"
+        #recurse: yes
+
+
+
+- name: Optional cleanup of local private key
+  hosts: localhost
+  gather_facts: no
+  tasks:
+    - name: Remove local private key (uncomment if you want cleanup)
+      when: false   # remove this line to enable cleanup
+      file:
+        path: /tmp/weblogic_keys/wl_ssh_key
+        state: absent

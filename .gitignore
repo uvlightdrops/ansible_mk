@@ -1,0 +1,11 @@
+sources/
+*.swp
+*.swo
+away_*
+tmp/
+# test*
+out.*
+__pycache__/
+_bak_*
+.idea
+

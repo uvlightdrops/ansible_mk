@@ -1,0 +1,17 @@
+
+all:
+  children:
+    control:
+      hosts:
+        wlcluster:
+          ansible_host: 192.168.49.2    # control-plane IP 
+          ansible_user: docker         
+    workers:
+      hosts:
+        wlcluster-m02:
+          ansible_host: 192.168.49.3
+          ansible_user: docker
+        wlcluster-m03:
+          ansible_host: 192.168.49.4
+          ansible_user: docker
+
