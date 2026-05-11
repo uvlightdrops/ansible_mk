@@ -1,0 +1,28 @@
+# Minimal Domain CR template for WebLogic Kubernetes Operator
+# Adjust apiVersion to the operator version you deploy (example uses weblogic.oracle/v8)
+apiVersion: weblogic.oracle/v8
+kind: Domain
+metadata:
+  name: sample-domain1
+  namespace: weblogic
+spec:
+  domainUID: sample-domain1
+  image: "REPLACE_WITH_YOUR_WLS_IMAGE"
+  imagePullPolicy: IfNotPresent
+  webLogicCredentialsSecret: weblogic-admin-credentials
+  serverStartPolicy: "IfNeeded"
+  adminServer:
+    serverName: admin-server
+    serverStartState: RUNNING
+    nodePort: 30701
+  clusters:
+    - clusterName: sample-cluster
+      replicas: 2
+  domainHome:
+    persistentVolumeClaim:
+      claimName: pvc-weblogic-home
+    path: /u01/domains/sample-domain1
+
+# NOTE: This is a minimal template. Consult the Operator documentation for full schema
+# and for specific apiVersion matching the operator you installed.
+

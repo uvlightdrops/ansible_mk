@@ -1,0 +1,91 @@
+---
+- name: Deploy WebLogic Operator and Domain (Minikube/Dev)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - group_vars/all.yml
+
+  tasks:
+    - name: Ensure target namespace exists
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ namespace }}"
+
+    - name: Create hostPath PersistentVolume (dev)
+      kubernetes.core.k8s:
+        state: present
+        definition: "{{ lookup('file', 'k8s/pv.yaml') | from_yaml }}"
+
+    - name: Create PersistentVolumeClaim for domain home
+      kubernetes.core.k8s:
+        state: present
+        definition: "{{ lookup('file', 'k8s/pvc.yaml') | from_yaml }}"
+
+    - name: Create admin credentials Secret
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: weblogic-admin-credentials
+            namespace: "{{ namespace }}"
+          type: Opaque
+          stringData:
+            username: "{{ weblogic_admin_user }}"
+            password: "{{ weblogic_admin_password }}"
+
+    - name: Apply Operator manifest (if present)
+      command: kubectl apply -f "{{ operator_manifest }}"
+      register: apply_operator
+      changed_when: "'configured' in apply_operator.stdout or 'created' in apply_operator.stdout or 'applied' in apply_operator.stdout"
+      failed_when: apply_operator.rc != 0 and 'No such file or directory' in apply_operator.stderr
+      ignore_errors: yes
+
+    - name: Pause briefly to let operator start
+      pause:
+        seconds: 5
+
+    - name: Apply Domain manifest
+      command: kubectl apply -f "{{ domain_manifest }}"
+      register: apply_domain
+      changed_when: "'configured' in apply_domain.stdout or 'created' in apply_domain.stdout or 'applied' in apply_domain.stdout"
+      failed_when: apply_domain.rc != 0
+
+    - name: Wait for Admin Server pod to appear
+      kubernetes.core.k8s_info:
+        kind: Pod
+        namespace: "{{ namespace }}"
+        label_selectors:
+          - 'weblogic.domainUID={{ domain_uid }}'
+          - 'weblogic.serverName=admin-server'
+      register: admin_pods
+      retries: 20
+      delay: 6
+      until: admin_pods.resources | length > 0
+
+    - name: Wait until Admin Server pod is Ready
+      vars:
+        admin_name: "{{ (admin_pods.resources | first).metadata.name }}"
+      kubernetes.core.k8s_info:
+        kind: Pod
+        namespace: "{{ namespace }}"
+        name: "{{ admin_name }}"
+      register: admin_ready
+      retries: 40
+      delay: 10
+      until: admin_ready.resources | length > 0 and (admin_ready.resources[0].status.conditions | selectattr('type','equalto','Ready') | selectattr('status','equalto','True') | list) | length > 0
+
+    - name: Show deployed resources (namespace)
+      command: kubectl get pods -n "{{ namespace }}" -o wide
+      register: pods_out
+
+    - name: Print pod list
+      debug:
+        msg: "{{ pods_out.stdout }}"
+

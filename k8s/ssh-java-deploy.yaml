@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wls-dev
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wls-dev
+  template:
+    metadata:
+      labels:
+        app: wls-dev
+    spec:
+      containers:
+      - name: wls
+        image: wls-dev:latest
+        securityContext:
+          runAsUser: 1000
+        ports:
+        - containerPort: 22
+        volumeMounts:
+        - name: home
+          mountPath: /home/weblogic
+      volumes:
+      - name: home
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wls-dev-ssh
+  namespace: default
+spec:
+  selector:
+    app: wls-dev
+  ports:
+  - protocol: TCP
+    port: 22
+    targetPort: 22
+  type: ClusterIP
+

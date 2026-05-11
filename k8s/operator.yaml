@@ -1,0 +1,10 @@
+# Operator manifest placeholder
+# Download the official WebLogic Kubernetes Operator manifest into this file
+# Example:
+# curl -L -o k8s/operator.yaml \
+#   https://github.com/oracle/weblogic-kubernetes-operator/releases/download/<tag>/weblogic-operator.yaml
+#
+# After placing the operator manifest here, the playbook will apply it.
+
+# (This file intentionally left as a placeholder.)
+

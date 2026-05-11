@@ -1,0 +1,22 @@
+---
+# Global vars for weblogic deployment
+namespace: weblogic
+
+# Domain identity
+domain_uid: sample-domain1
+weblogic_admin_user: admin
+weblogic_admin_password: ChangeMe123!   # change or store in Ansible Vault
+
+# Image: replace with your WebLogic image (private registry or local)
+weblogic_image: REPLACE_WITH_YOUR_WLS_IMAGE
+
+# PV/PVC settings (dev: hostPath)
+pv_host_path: /mnt/weblogic/pv-home
+pv_storage: 5Gi
+storage_class: manual
+
+# Manifest paths (relative to repo)
+operator_manifest: k8s/operator.yaml
+domain_manifest: k8s/domain.yaml
+
+
