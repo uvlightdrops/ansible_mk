@@ -1,17 +1,37 @@
-
 all:
   children:
     control:
       hosts:
         wlcluster:
-          ansible_host: 192.168.49.2    # control-plane IP 
-          ansible_user: docker         
+          ansible_host: 192.168.58.2
+          ansible_user: docker
+          ansible_ssh_private_key_file: /home/flow/.ssh/id_ed25519
+    weblogic_ssh:
+      hosts:
+        wls-admin-node:
+          ansible_host: 192.168.58.2
+          ansible_port: 30222
+          ansible_user: docker
+          ansible_ssh_private_key_file: /home/flow/.ssh/id_ed25519
+        wls-managed-1-node:
+          ansible_host: 192.168.58.2
+          ansible_port: 30223
+          ansible_user: docker
+          ansible_ssh_private_key_file: /home/flow/.ssh/id_ed25519
+        wls-managed-2-node:
+          ansible_host: 192.168.58.2
+          ansible_port: 30224
+          ansible_user: docker
+          ansible_ssh_private_key_file: /home/flow/.ssh/id_ed25519
     workers:
       hosts:
         wlcluster-m02:
-          ansible_host: 192.168.49.3
+          ansible_host: 192.168.58.3
           ansible_user: docker
+          ansible_ssh_private_key_file: /home/flow/.ssh/id_ed25519
         wlcluster-m03:
-          ansible_host: 192.168.49.4
+          ansible_host: 192.168.58.4
           ansible_user: docker
+          ansible_ssh_private_key_file: /home/flow/.ssh/id_ed25519
 
+# You can add group_vars under group_vars/ directory or edit this file to add vars.

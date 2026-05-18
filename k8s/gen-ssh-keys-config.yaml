@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gen-ssh-keys-script
+  namespace: weblogic
+data:
+  gen-ssh-keys.sh: |
+    #!/bin/sh
+    set -e
+    # If image contains a backup of /etc/ssh (from build), copy it to the mounted volume
+    if [ -d /etc/ssh.orig ] && [ -z "$(ls -A /etc/ssh 2>/dev/null)" ]; then
+      cp -a /etc/ssh.orig/* /etc/ssh || true
+    fi
+    # Ensure minimal sshd_config exists if nothing was copied
+    if [ ! -f /etc/ssh/sshd_config ]; then
+      cat > /etc/ssh/sshd_config <<'EOF'
+    Port 22
+    HostKey /etc/ssh/ssh_host_rsa_key
+    HostKey /etc/ssh/ssh_host_ecdsa_key
+    HostKey /etc/ssh/ssh_host_ed25519_key
+    SyslogFacility AUTH
+    PermitRootLogin no
+    PasswordAuthentication no
+    ChallengeResponseAuthentication no
+    UsePAM yes
+    EOF
+    fi
+    # generate host keys if missing
+    ssh-keygen -A || true
+    # fix ownership/permissions for non-root user (uid 1000)
+    chown -R 1000:1000 /etc/ssh || true
+    find /etc/ssh -type f -exec chmod 600 {} \; || true
+

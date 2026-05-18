@@ -1,0 +1,40 @@
+---
+# bootstrap_nodes.yml
+# - first play: ensure python3 exists using raw commands (no facts)
+# - second play: gather facts and run simple checks (ping, create marker file)
+
+- name: Bootstrap nodes - install python if missing
+  hosts: all
+  gather_facts: no
+  become: yes
+  tasks:
+    - name: Ensure Python3 is present (apt or yum)
+      raw: |
+        if command -v python3 >/dev/null 2>&1; then
+          echo 'python3 already present'
+          exit 0
+        fi
+        if command -v apt-get >/dev/null 2>&1; then
+          apt-get update && apt-get install -y python3 || exit 1
+        elif command -v yum >/dev/null 2>&1; then
+          yum install -y python3 || exit 1
+        else
+          echo 'No known package manager found to install python3' >&2
+          exit 1
+        fi
+
+- name: Verify connectivity and perform simple tasks
+  hosts: all
+  gather_facts: yes
+  become: yes
+  tasks:
+    - name: Ping
+      ping:
+
+    - name: Create marker file to indicate bootstrap
+      file:
+        path: /tmp/ansible_bootstrapped
+        state: touch
+        owner: docker
+        mode: '0644'
+

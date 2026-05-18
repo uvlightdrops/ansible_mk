@@ -1,23 +1,24 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: wls-dev
+  name: wls-managed-1
   namespace: weblogic
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: wls-dev
+      app: wls-managed-1
   template:
     metadata:
       labels:
-        app: wls-dev
+        app: wls-managed-1
     spec:
       volumes:
       - name: ssh-keys
         emptyDir: {}
-      - name: home
-        emptyDir: {}
+      - name: domain-home
+        persistentVolumeClaim:
+          claimName: pvc-weblogic-home
       - name: gen-ssh-keys-script
         configMap:
           name: gen-ssh-keys-script
@@ -37,7 +38,7 @@ spec:
             readOnly: true
 
       containers:
-      - name: wls
+      - name: wls-managed
         image: wls-dev:1.3
         imagePullPolicy: IfNotPresent
         securityContext:
@@ -47,20 +48,6 @@ spec:
         volumeMounts:
         - name: ssh-keys
           mountPath: /etc/ssh
-        - name: home
-          mountPath: /home/weblogic
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: wls-dev-ssh
-  namespace: weblogic
-spec:
-  selector:
-    app: wls-dev
-  ports:
-  - protocol: TCP
-    port: 22
-    targetPort: 22
-  type: ClusterIP
+        - name: domain-home
+          mountPath: /u01/domains
 

@@ -90,3 +90,36 @@ ssh -p 2222 weblogic@localhost
 
 Hinweis: Änderungen im Pod sind flüchtig. Nutze PVC/hostPath, wenn du persistente Daten brauchst.
 
+Deploy Four Ubuntu-style servers (admin, managed1, managed2, DB)
+--------------------------------------------------------------
+Kurze Schritte (alles lokal, Minikube Profil wlcluster):
+
+1) Baue das Dev‑Image und lade es in Minikube:
+```bash
+# include your public key so the image allows key-based SSH
+minikube -p wlcluster image build --build-arg SSH_PUBKEY="$(cat ~/.ssh/id_ed25519.pub)" -t wls-dev:latest images/wls-dev
+```
+
+2) Deploye die vier Pods/Services:
+```bash
+kubectl apply -f k8s/ubuntu-wls-deployments.yaml
+```
+
+3) SSH auf Admin‑Pod (Port‑Forward):
+```bash
+kubectl get pods -n weblogic
+kubectl port-forward -n weblogic svc/wls-admin-ssh 2222:22 &
+ssh -p 2222 weblogic@localhost
+# Passwort: weblogic
+```
+
+4) Install WebLogic manually (altertümlich):
+- Kopiere Oracle WebLogic Installer in den Pod (z. B. `kubectl cp`):
+  ```bash
+  kubectl cp /path/to/fmw_14.1_x_generic.jar weblogic/<admin-pod>:/tmp/
+  ```
+- Im Pod: Entpacken und Installation starten (GUIless mode / silent) — siehe Oracle Installer docs.
+
+Wichtig: Oracle WebLogic Installer ist lizenziert. Lade ihn manuell auf deine Maschine und kopiere ihn in die Pods.
+
+
