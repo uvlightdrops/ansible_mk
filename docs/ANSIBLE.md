@@ -1,7 +1,3 @@
-Die Dokumentation wurde in das Verzeichnis `docs/` verschoben.
-
-Bitte siehe `docs/ANSIBLE.md` für die vollständige Anleitung zur Ansible‑Nutzung.
-
 Ansible quickstart for this repo
 
 This README explains how to generate an Ansible inventory from your Minikube profile, bootstrap nodes (install Python) and run a simple playbook.
@@ -47,7 +43,6 @@ Notes/Comments
 - Inventory entries use `ansible_user: docker` and `ansible_ssh_private_key_file` by default. Adjust as necessary for your environment.
 - The playbook uses `raw` to bootstrap Python because Ansible requires Python on the remote hosts to run modules.
 - For Minikube container nodes: ensure SSH access is possible (we prepared SSH in the dev images).
- - For Minikube container nodes: ensure SSH access is possible (we prepared SSH in the dev images).
 
 Helper scripts
 --------------
@@ -55,3 +50,4 @@ Helper scripts
 - `prepare_docker/fix_wls_pods.sh` — convenience script to restart deployments and idempotently ensure the public key is present in each pod's `/home/docker/.ssh/authorized_keys`.
 
 If you want, I can also add more example tasks (installing Java, copying WebLogic binaries, etc.).
+

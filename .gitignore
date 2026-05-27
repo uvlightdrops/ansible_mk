@@ -5,6 +5,7 @@ away_*
 tmp/
 # test*
 out.*
+out/
 __pycache__/
 _bak_*
 .idea

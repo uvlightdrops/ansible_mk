@@ -1,7 +1,8 @@
+# DEPRECATED: duplicate of pvc-weblogic-home definition. Use k8s/pvc-weblogic-home.yaml instead.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: pvc-weblogic-home
+  name: pvc-weblogic-home-deprecated
   namespace: weblogic
 spec:
   accessModes:

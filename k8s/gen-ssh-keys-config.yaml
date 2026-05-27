@@ -1,18 +1,24 @@
 apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: gen-ssh-keys-script
-  namespace: weblogic
 data:
-  gen-ssh-keys.sh: |
+  gen-ssh-keys.sh: |+
     #!/bin/sh
-    set -e
+    set -xeu
+    # Debuggable init script for generating SSH host keys and preparing /home/docker
+    echo "=== gen-ssh-keys START ===" >&2
+    date >&2
+
+    echo "Environment:" >&2
+    env | grep -E 'HOME|USER|PATH' >&2 || true
+
     # If image contains a backup of /etc/ssh (from build), copy it to the mounted volume
     if [ -d /etc/ssh.orig ] && [ -z "$(ls -A /etc/ssh 2>/dev/null)" ]; then
-      cp -a /etc/ssh.orig/* /etc/ssh || true
+      echo "Copying /etc/ssh.orig -> /etc/ssh" >&2
+      cp -av /etc/ssh.orig/* /etc/ssh || true
     fi
+
     # Ensure minimal sshd_config exists if nothing was copied
     if [ ! -f /etc/ssh/sshd_config ]; then
+      echo "Creating minimal sshd_config" >&2
       cat > /etc/ssh/sshd_config <<'EOF'
     Port 22
     HostKey /etc/ssh/ssh_host_rsa_key
@@ -25,9 +31,26 @@ data:
     UsePAM yes
     EOF
     fi
-    # generate host keys if missing
+
+    echo "Running ssh-keygen -A" >&2
     ssh-keygen -A || true
-    # fix ownership/permissions for non-root user (uid 1000)
+
+    echo "Fix ownership/permissions for /etc/ssh" >&2
     chown -R 1000:1000 /etc/ssh || true
     find /etc/ssh -type f -exec chmod 600 {} \; || true
 
+    # ensure docker home exists and is writable by uid 1000
+    echo "Ensure /home/docker and .ssh exist" >&2
+    mkdir -p /home/docker/.ssh || true
+    touch /home/docker/.ssh/authorized_keys || true
+    chown -R 1000:1000 /home/docker || true
+    chmod 700 /home/docker/.ssh || true
+    chmod 600 /home/docker/.ssh/authorized_keys || true
+
+    echo "=== gen-ssh-keys END ===" >&2
+    date >&2
+
+kind: ConfigMap
+metadata:
+  name: gen-ssh-keys-script
+  namespace: weblogic

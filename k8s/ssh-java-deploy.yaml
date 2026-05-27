@@ -21,6 +21,7 @@ spec:
       - name: gen-ssh-keys-script
         configMap:
           name: gen-ssh-keys-script
+          defaultMode: 0755
 
       initContainers:
       - name: gen-ssh-keys

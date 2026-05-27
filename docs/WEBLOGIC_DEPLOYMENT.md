@@ -1,8 +1,4 @@
-Die Dokumentation wurde in das Verzeichnis `docs/` verschoben.
-
-Bitte siehe `docs/WEBLOGIC_DEPLOYMENT.md` für die vollständige Anleitung und Referenz.
-
-Hinweis: Alte Kopien der Dokumente wurden in `docs/` abgelegt; die Kubernetes‑Manifeste bleiben im Verzeichnis `k8s/`.
+WebLogic Deployment (Ansible + Minikube) - Kurzangaben
 
 Überblick
 ---------
@@ -22,7 +18,7 @@ Wichtige Dateien
 Voraussetzungen
 ---------------
 - Minikube Profil mit funktionierenden Nodes (z. B. `minikube -p wlcluster start --nodes=3`)
-- `kubectl` konfiguriert oder KUBECONFIG entsprechend (z. B. `export KUBECONFIG=$(minikube -p wlcluster kubeconfig)`)
+- `kubectl` konfiguriert oder KUBECONFIG entsprechend (z. B. `export KUBECONFIG=$(minikube -p wlcluster kubeconfig)`) 
 - Ansible und die Collection `kubernetes.core` installiert:
 
 ```bash
@@ -76,8 +72,8 @@ Troubleshooting
 
 Wichtige Hinweise zu SSH/InitScript
 ----------------------------------
-- Das Init‑Script, das Hostkeys generiert und `/home/docker` anlegt, wurde aus der ConfigMap ausgelagert
-  und liegt nun als Datei `prepare_docker/gen-ssh-keys.sh` im Repo. Um die ConfigMap zu (re)generieren, nutze:
+- Das Init‑Script, das Hostkeys generiert und `/home/docker` anlegt, liegt als Datei `prepare_docker/gen-ssh-keys.sh` im Repo.
+  Um die ConfigMap zu (re)generieren, nutze:
 
 ```bash
 kubectl create configmap gen-ssh-keys-script --from-file=prepare_docker/gen-ssh-keys.sh -n weblogic --dry-run=client -o yaml > k8s/gen-ssh-keys-config.yaml
@@ -110,56 +106,3 @@ Aufräumen / Aufteilung der Manifeste
   `deploy-wls-admin.yaml`, `deploy-wls-managed-1.yaml`, `deploy-wls-managed-2.yaml`, `deploy-test-db.yaml`,
   sowie `services-clusterip.yaml` / `services-nodeports.yaml`.
 
-
-Dev: schneller SSH‑Pod mit Java (nur für Tests)
----------------------------------------------
-Wenn du per SSH in einen Pod testen willst, lege ich ein dev‑Image und ein Deployment an.
-
-Build & load image in Minikube:
-```bash
-minikube -p wlcluster image build -t wls-dev:latest images/wls-dev
-# alternativ: docker build -t wls-dev:latest images/wls-dev && minikube -p wlcluster image load wls-dev:latest
-```
-
-Deployment & Zugriff:
-```bash
-kubectl apply -f k8s/ssh-java-deploy.yaml -n weblogic
-POD=$(kubectl get pods -n weblogic -l app=wls-dev -o jsonpath='{.items[0].metadata.name}')
-kubectl port-forward -n weblogic pod/$POD 2222:22 &
-ssh -p 2222 weblogic@localhost
-# Passwort in dev image: weblogic
-```
-
-Hinweis: Änderungen im Pod sind flüchtig. Nutze PVC/hostPath, wenn du persistente Daten brauchst.
-
-Deploy Four Ubuntu-style servers (admin, managed1, managed2, DB)
---------------------------------------------------------------
-Kurze Schritte (alles lokal, Minikube Profil wlcluster):
-
-1) Baue das Dev‑Image und lade es in Minikube:
-```bash
-# include your public key so the image allows key-based SSH
-minikube -p wlcluster image build --build-arg SSH_PUBKEY="$(cat ~/.ssh/id_ed25519.pub)" -t wls-dev:latest images/wls-dev
-```
-
-2) Deploye die vier Pods/Services:
-```bash
-kubectl apply -f k8s/ubuntu-wls-deployments.yaml
-```
-
-3) SSH auf Admin‑Pod (Port‑Forward):
-```bash
-kubectl get pods -n weblogic
-kubectl port-forward -n weblogic svc/wls-admin-ssh 2222:22 &
-ssh -p 2222 weblogic@localhost
-# Passwort: weblogic
-```
-
-4) Install WebLogic manually (altertümlich):
-- Kopiere Oracle WebLogic Installer in den Pod (z. B. `kubectl cp`):
-  ```bash
-  kubectl cp /path/to/fmw_14.1_x_generic.jar weblogic/<admin-pod>:/tmp/
-  ```
-- Im Pod: Entpacken und Installation starten (GUIless mode / silent) — siehe Oracle Installer docs.
-
-Wichtig: Oracle WebLogic Installer ist lizenziert. Lade ihn manuell auf deine Maschine und kopiere ihn in die Pods.

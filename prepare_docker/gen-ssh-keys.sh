@@ -1,0 +1,49 @@
+#!/bin/sh
+set -xeu
+# Debuggable init script for generating SSH host keys and preparing /home/docker
+echo "=== gen-ssh-keys START ===" >&2
+date >&2
+
+echo "Environment:" >&2
+env | grep -E 'HOME|USER|PATH' >&2 || true
+
+# If image contains a backup of /etc/ssh (from build), copy it to the mounted volume
+if [ -d /etc/ssh.orig ] && [ -z "$(ls -A /etc/ssh 2>/dev/null)" ]; then
+  echo "Copying /etc/ssh.orig -> /etc/ssh" >&2
+  cp -av /etc/ssh.orig/* /etc/ssh || true
+fi
+
+# Ensure minimal sshd_config exists if nothing was copied
+if [ ! -f /etc/ssh/sshd_config ]; then
+  echo "Creating minimal sshd_config" >&2
+  cat > /etc/ssh/sshd_config <<'EOF'
+Port 22
+HostKey /etc/ssh/ssh_host_rsa_key
+HostKey /etc/ssh/ssh_host_ecdsa_key
+HostKey /etc/ssh/ssh_host_ed25519_key
+SyslogFacility AUTH
+PermitRootLogin no
+PasswordAuthentication no
+ChallengeResponseAuthentication no
+UsePAM yes
+EOF
+fi
+
+echo "Running ssh-keygen -A" >&2
+ssh-keygen -A || true
+
+echo "Fix ownership/permissions for /etc/ssh" >&2
+chown -R 1000:1000 /etc/ssh || true
+find /etc/ssh -type f -exec chmod 600 {} \; || true
+
+# ensure docker home exists and is writable by uid 1000
+echo "Ensure /home/docker and .ssh exist" >&2
+mkdir -p /home/docker/.ssh || true
+touch /home/docker/.ssh/authorized_keys || true
+chown -R 1000:1000 /home/docker || true
+chmod 700 /home/docker/.ssh || true
+chmod 600 /home/docker/.ssh/authorized_keys || true
+
+echo "=== gen-ssh-keys END ===" >&2
+date >&2
+

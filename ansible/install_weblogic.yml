@@ -1,0 +1,78 @@
+---
+# install_weblogic.yml
+# Classic WebLogic installation via Ansible (silent installer)
+# Usage:
+#  - place your WebLogic installer (jar/bin) under ansible/files/
+#    and set `weblogic_installer_src` variable below or via -e
+#  - run: ansible-playbook -i inventory.yaml ansible/install_weblogic.yml -u docker --private-key ~/.ssh/id_ed25519
+
+- name: Prepare hosts and install WebLogic (classic)
+  hosts: weblogic_ssh
+  gather_facts: yes
+  become: yes
+  vars:
+    weblogic_user: docker
+    weblogic_group: docker
+    weblogic_home: /u01/oracle
+    domain_home: /u01/domains
+    installer_dest: /tmp/weblogic_installer
+    # Path relative to playbook (control host). Put the installer into ansible/files/
+    weblogic_installer_src: files/fmw_generic_installer.jar
+    weblogic_installer_filename: "{{ weblogic_installer_src | basename }}"
+    response_template: templates/response.rsp.j2
+    java_package_apt: openjdk-17-jdk
+    java_package_yum: java-17-openjdk-devel
+
+  tasks:
+    - name: Ensure Java is installed (Debian/RedHat)
+      package:
+        name: "{{ java_package_apt if ansible_facts['os_family'] == 'Debian' else java_package_yum }}"
+        state: present
+
+    - name: Create weblogic base directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ weblogic_user }}"
+        group: "{{ weblogic_group }}"
+        mode: '0755'
+      loop:
+        - "{{ weblogic_home }}"
+        - "{{ domain_home }}"
+        - "{{ installer_dest }}"
+
+    - name: Upload WebLogic installer to target
+      copy:
+        src: "{{ weblogic_installer_src }}"
+        dest: "{{ installer_dest }}/{{ weblogic_installer_filename }}"
+        mode: '0755'
+
+    - name: Render response file for silent install
+      template:
+        src: "{{ response_template }}"
+        dest: "{{ installer_dest }}/response.rsp"
+        owner: "{{ weblogic_user }}"
+        group: "{{ weblogic_group }}"
+        mode: '0644'
+
+    - name: Run WebLogic installer (silent) as weblogic user
+      become: yes
+      become_user: "{{ weblogic_user }}"
+      shell: |
+        cd {{ installer_dest }} && \
+        java -jar {{ weblogic_installer_filename }} -silent -responseFile response.rsp || true
+      args:
+        chdir: "{{ installer_dest }}"
+      register: install_result
+
+    - name: Show installer output
+      debug:
+        var: install_result.stdout_lines
+
+    - name: Create domain directory marker
+      file:
+        path: "{{ domain_home }}/.weblogic_installed"
+        state: touch
+        owner: "{{ weblogic_user }}"
+        mode: '0644'
+

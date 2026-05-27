@@ -163,3 +163,4 @@ ssh -p 2222 weblogic@localhost
 - Im Pod: Entpacken und Installation starten (GUIless mode / silent) — siehe Oracle Installer docs.
 
 Wichtig: Oracle WebLogic Installer ist lizenziert. Lade ihn manuell auf deine Maschine und kopiere ihn in die Pods.
+

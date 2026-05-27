@@ -17,7 +17,7 @@ mkdir -p /home/$USER/.ssh
 touch /home/$USER/.ssh/authorized_keys
 
 #PUBKEY=/home/$USER/.ssh/ansible_id.pub
-PUBKEY=/home/$USER/.ssh/id_ed25519.pub
+PUBKEY=/home/$USER/.ssh/id_ed25519_docker.pub
 # append key only if not present
 grep -qxFf "$PUBKEY" /home/$USER/.ssh/authorized\_keys 2>/dev/null || cat "$PUBKEY" >> /home/$USER/.ssh/authorized_keys
 

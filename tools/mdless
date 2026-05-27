@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# mdless - view Markdown files in the terminal (best-effort)
+# Tries tools in this order: glow, pandoc, bat, less
+# If no file is given, reads stdin.
+
+show_usage(){
+  cat <<'EOF'
+Usage: mdless [FILE]
+
+View a Markdown file in the terminal with paging.
+Prefered renderers (if installed):
+- glow   : nice terminal renderer (recommended)
+- pandoc : converts to plain text
+- bat    : syntax highlighting
+- less   : fallback (raw markdown)
+
+Examples:
+  mdless README.md
+  cat README.md | mdless
+EOF
+}
+
+if [ "${1-}" = "-h" ] || [ "${1-}" = "--help" ]; then
+  show_usage
+  exit 0
+fi
+
+_cmd_exists(){ command -v "$1" >/dev/null 2>&1; }
+
+INPUT=""
+TMPFILE=""
+cleanup(){
+  [ -n "$TMPFILE" ] && [ -f "$TMPFILE" ] && rm -f "$TMPFILE" || true
+}
+trap cleanup EXIT
+
+if [ "$#" -eq 0 ]; then
+  # read stdin into temp file
+  TMPFILE=$(mktemp -t mdless.XXXXXX)
+  cat - > "$TMPFILE"
+  INPUT="$TMPFILE"
+else
+  INPUT="$1"
+  if [ ! -f "$INPUT" ]; then
+    echo "File not found: $INPUT" >&2
+    exit 2
+  fi
+fi
+
+if _cmd_exists glow; then
+  # glow handles files and stdin nicely; prefer pretty rendering
+  if [ -n "$TMPFILE" ]; then
+    glow -s "$TMPFILE"
+  else
+    glow -s "$INPUT"
+  fi
+  exit 0
+fi
+
+if _cmd_exists pandoc; then
+  # convert to plain text for stable viewing
+  pandoc --from=markdown --to=plain "$INPUT" 2>/dev/null | less -R
+  exit 0
+fi
+
+if _cmd_exists bat; then
+  # bat provides nice paging and highlighting (but not rendered markdown)
+  bat --paging=always --style=plain "$INPUT"
+  exit 0
+fi
+
+# Fallback: raw less
+less -R "$INPUT"
+

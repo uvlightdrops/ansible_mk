@@ -6,6 +6,16 @@ all:
           ansible_host: 192.168.58.2
           ansible_user: docker
           ansible_ssh_private_key_file: /home/flow/.ssh/id_ed25519
+    workers:
+      hosts:
+        wlcluster-m02:
+          ansible_host: 192.168.58.3
+          ansible_user: docker
+          ansible_ssh_private_key_file: /home/flow/.ssh/id_ed25519
+        wlcluster-m03:
+          ansible_host: 192.168.58.4
+          ansible_user: docker
+          ansible_ssh_private_key_file: /home/flow/.ssh/id_ed25519
     weblogic_ssh:
       hosts:
         wls-admin-node:
@@ -21,16 +31,6 @@ all:
         wls-managed-2-node:
           ansible_host: 192.168.58.2
           ansible_port: 30224
-          ansible_user: docker
-          ansible_ssh_private_key_file: /home/flow/.ssh/id_ed25519
-    workers:
-      hosts:
-        wlcluster-m02:
-          ansible_host: 192.168.58.3
-          ansible_user: docker
-          ansible_ssh_private_key_file: /home/flow/.ssh/id_ed25519
-        wlcluster-m03:
-          ansible_host: 192.168.58.4
           ansible_user: docker
           ansible_ssh_private_key_file: /home/flow/.ssh/id_ed25519
 

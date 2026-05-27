@@ -16,12 +16,15 @@ spec:
       volumes:
       - name: ssh-keys
         emptyDir: {}
+      - name: home
+        emptyDir: {}
       - name: domain-home
         persistentVolumeClaim:
           claimName: pvc-weblogic-home
       - name: gen-ssh-keys-script
         configMap:
           name: gen-ssh-keys-script
+          defaultMode: 0755
 
       initContainers:
       - name: gen-ssh-keys
@@ -33,6 +36,8 @@ spec:
         volumeMounts:
           - name: ssh-keys
             mountPath: /etc/ssh
+          - name: home
+            mountPath: /home/docker
           - name: gen-ssh-keys-script
             mountPath: /scripts
             readOnly: true
@@ -48,6 +53,8 @@ spec:
         volumeMounts:
         - name: ssh-keys
           mountPath: /etc/ssh
+        - name: home
+          mountPath: /home/docker
         - name: domain-home
           mountPath: /u01/domains
 
