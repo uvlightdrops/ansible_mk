@@ -62,6 +62,43 @@ Beispiel‑Workflow (schnell)
    ./prepare_docker/loop_install_pubkey.sh -n weblogic -p ~/.ssh/id_ed25519_docker.pub
    ```
 
+      ## Ablauf: `build_and_deploy_wls_dev.sh` und `gen-ssh-keys.sh`
+
+      Kurz und knapp:
+
+      - `prepare_docker/build_and_deploy_wls_dev.sh`: baut das Dev‑Image lokal, lädt es in Minikube und startet die WLS‑Deployments neu.
+      - `prepare_docker/gen-ssh-keys.sh`: Init‑Script (InitContainer) im Pod — erzeugt Host‑Keys, stellt `/home/docker/.ssh/authorized_keys` sicher, liest Pubkeys aus `/pubkeys` ein und setzt best‑effort Owner/Perms.
+
+      Details — `build_and_deploy_wls_dev.sh`:
+      1. `docker build -t $IMAGE_TAG images/wls-dev` (lokal)
+      2. `minikube image load $IMAGE_TAG` (lädt Image in Minikube)
+      3. `kc rollout restart deployment/... -n $NAMESPACE` (neustartet Deployments)
+      4. `kc get pods -n $NAMESPACE -o wide` (zeigt Pods)
+
+      Details — `gen-ssh-keys.sh` (InitContainer):
+      1. Restore `/etc/ssh` aus `/etc/ssh.orig` falls vorhanden.
+      2. `ssh-keygen -A` — erzeugt fehlende Host‑Keys (wichtig bei emptyDir für `/etc/ssh`).
+      3. `mkdir -p /home/docker/.ssh` und `touch /home/docker/.ssh/authorized_keys`.
+      4. Für alle `*.pub` in `/pubkeys`: prüfe ob bereits vorhanden, sonst append (idempotent).
+      5. Best‑effort `chown` auf `docker` (oder fallback 1000:1000) und chmod 700/600.
+
+      Kurzbefehle zur Diagnose:
+      ```bash
+      # Build + load + restart
+      ./prepare_docker/build_and_deploy_wls_dev.sh
+
+      # Apply ConfigMap with pubkeys
+      kc apply -f k8s/weblogic-authorized-keys.yaml
+
+      # Check InitContainer logs and authorized_keys
+      POD=$(kc get pods -n weblogic -l app=wls-admin -o jsonpath='{.items[0].metadata.name}')
+      kc logs -n weblogic $POD -c gen-ssh-keys --tail=200
+      kc exec -n weblogic $POD -c wls-admin -- sh -c 'ls -ln /home/docker /home/docker/.ssh /home/docker/.ssh/authorized_keys || true; sed -n "1,20p" /home/docker/.ssh/authorized_keys || true'
+
+      # Temporary perms fix (debug as root)
+      kc debug -n weblogic pod/$POD -it --image=alpine --target=wls-admin -- sh -c "chown -R docker:docker /home/docker || true; chmod 700 /home/docker/.ssh || true; chmod 600 /home/docker/.ssh/authorized_keys || true"
+      ```
+
 Vorbereitung der lokalen Umgebung
 ---------------------------------
 Kurz und knapp (für Fortgeschrittene): damit die Skripte reproduzierbar in non‑interactive Shells laufen, lege ich einen kleinen `kc`‑Wrapper ins Repo (`tools/kc`).
@@ -98,4 +135,41 @@ export WL_NS=weblogic
 
 Warum das so gemacht ist: Aliasse in `~/.bashrc` sind für interaktive Shells; scripts laufen meist in non‑interactive shells
 und sehen keine aliases. Ein kleines ausführbares `kc` ist reproduzierbar, CI‑freundlich und vermeidet `eval` oder `source ~/.bashrc` in Skripten.
+
+
+## Dateien im Detail: `k8s/gen-ssh-keys-config.yaml` und `prepare_docker/gen-ssh-keys.sh`
+
+Diese beiden Dateien sind zentral für das Einrichten von SSH‑Zugriff in den Dev‑Pods. Kurz:
+
+- `prepare_docker/gen-ssh-keys.sh` ist das Init/Bootstrap‑Script, das im Pod ausgeführt wird.
+  - Es erzeugt SSH‑Hostkeys (ssh-keygen -A), erstellt/prüft `/home/docker/.ssh/authorized_keys` und liest
+    Public‑Keys aus `/pubkeys` (ConfigMap) ein. Die Installation ist idempotent (prüft vorher per grep).
+  - Setzt best‑effort Ownership/Perms (chown auf `docker` oder fallback 1000:1000, chmod 700/600).
+  - Wird bewusst robust geschrieben (Fehler werden toleriert) und enthält Debug‑Ausgaben.
+
+- `k8s/gen-ssh-keys-config.yaml` ist eine ConfigMap, die das Script als Datei (`gen-ssh-keys.sh`) enthält.
+  - In Deployments wird diese ConfigMap als Volume gemountet (z. B. `/scripts`) und die Datei als InitContainer ausgeführt.
+  - WICHTIG: setze `defaultMode: 0755` beim ConfigMap‑Volume, sonst ist die Datei nicht ausführbar und InitContainer schlägt fehl.
+
+Wie sie zusammenarbeiten
+- Erzeuge/aktualisiere die ConfigMap aus dem lokalen Script (siehe `gen_configmap_from_script.sh`).
+- Apply der ConfigMap sorgt dafür, dass alle Pods beim nächsten Start das aktuelle Script verwenden.
+- Der InitContainer führt das Script (als root) aus — dadurch können Host‑Keys generiert und `/home/docker` korrekt vorbereitet werden.
+
+Kurzbefehle (kopierbar):
+```bash
+# Erzeuge/aktualisiere die ConfigMap aus dem lokalen Script
+./prepare_docker/gen_configmap_from_script.sh -n weblogic
+
+# Wende die ConfigMap an
+kc apply -f k8s/gen-ssh-keys-config.yaml
+
+# Starte die Deployments neu, damit InitContainers laufen
+./prepare_docker/restart_wls_rollouts.sh -n weblogic
+
+# Prüfe InitContainer Logs
+POD=$(kc get pods -n weblogic -l app=wls-admin -o jsonpath='{.items[0].metadata.name}')
+kc logs -n weblogic $POD -c gen-ssh-keys --tail=200
+```
+
 
