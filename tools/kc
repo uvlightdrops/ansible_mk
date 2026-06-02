@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# Wrapper script `kc` to emulate your shell alias inside scripts.
+# Usage: kc [kubectl-args]
+# Behavior: calls `minikube -p $MK_PRF kubectl --` and, unless the user supplied -n/--namespace,
+# appends `-n $WL_NS` so your scripts behave like your interactive alias.
+
+MK_PRF="${MK_PRF:-wlcluster}"
+WL_NS="${WL_NS:-weblogic}"
+
+# If tools/kc is used from repo root, ensure we exec minikube from PATH; nothing else to do
+
+# detect if -n or --namespace present in the arguments (simple scan)
+has_ns=0
+for arg in "$@"; do
+  case "$arg" in
+    -n|--namespace)
+      has_ns=1
+      break
+      ;;
+    --namespace=*)
+      has_ns=1
+      break
+      ;;
+  esac
+done
+
+if [ "$has_ns" -eq 1 ]; then
+  exec minikube -p "$MK_PRF" kubectl -- "$@"
+else
+  # inject default namespace before other args
+  exec minikube -p "$MK_PRF" kubectl -- -n "$WL_NS" "$@"
+fi
+

@@ -40,9 +40,40 @@ find /etc/ssh -type f -exec chmod 600 {} \; || true
 echo "Ensure /home/docker and .ssh exist" >&2
 mkdir -p /home/docker/.ssh || true
 touch /home/docker/.ssh/authorized_keys || true
-chown -R 1000:1000 /home/docker || true
+# If a 'docker' user exists in the image, use its numeric UID:GID for ownership;
+# otherwise fall back to 1000:1000 as before.
+if getent passwd docker >/dev/null 2>&1; then
+  DOCKER_UID=$(getent passwd docker | cut -d: -f3)
+  DOCKER_GID=$(getent passwd docker | cut -d: -f4)
+  echo "Setting ownership to docker:$DOCKER_UID:$DOCKER_GID" >&2
+  chown -R ${DOCKER_UID}:${DOCKER_GID} /home/docker || true
+else
+  echo "User 'docker' not found; falling back to uid:gid 1000:1000" >&2
+  chown -R 1000:1000 /home/docker || true
+fi
 chmod 700 /home/docker/.ssh || true
 chmod 600 /home/docker/.ssh/authorized_keys || true
+
+# If a ConfigMap with public keys is mounted at /pubkeys, append any keys there
+if [ -d /pubkeys ]; then
+  echo "Checking /pubkeys for public keys to install" >&2
+  for k in /pubkeys/*; do
+    if [ -f "$k" ]; then
+      echo "- processing pubkey: $k" >&2
+      # append if not already present
+      if ! grep -qxFf "$k" /home/docker/.ssh/authorized_keys 2>/dev/null; then
+        cat "$k" >> /home/docker/.ssh/authorized_keys || true
+        echo "  -> appended $k" >&2
+      else
+        echo "  -> already present: $k" >&2
+      fi
+    fi
+  done
+  # enforce perms again
+  chown -R 1000:1000 /home/docker || true
+  chmod 700 /home/docker/.ssh || true
+  chmod 600 /home/docker/.ssh/authorized_keys || true
+fi
 
 echo "=== gen-ssh-keys END ===" >&2
 date >&2

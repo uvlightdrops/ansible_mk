@@ -62,3 +62,40 @@ Beispiel‑Workflow (schnell)
    ./prepare_docker/loop_install_pubkey.sh -n weblogic -p ~/.ssh/id_ed25519_docker.pub
    ```
 
+Vorbereitung der lokalen Umgebung
+---------------------------------
+Kurz und knapp (für Fortgeschrittene): damit die Skripte reproduzierbar in non‑interactive Shells laufen, lege ich einen kleinen `kc`‑Wrapper ins Repo (`tools/kc`).
+Er macht exakt das, was dein interaktives Alias tut: `minikube -p $MK_PRF kubectl -- -n $WL_NS`, und ist script‑freundlich.
+
+Schnelle Schritte:
+
+```bash
+# 1) ausführbar machen (einmalig)
+chmod +x tools/kc prepare_docker/*.sh
+
+# 2) tools ins PATH (temporär für diese Shell)
+export PATH="$(pwd)/tools:$PATH"
+
+# 3) Test: kc ohne Namespace injectet default namespace
+kc get pods            # -> minikube -p wlcluster kubectl -- -n weblogic get pods
+kc get pods -n kube-system  # respects explicit namespace
+```
+
+Konfiguration:
+- `MK_PRF` (default `wlcluster`): Minikube‑Profile, das `tools/kc` verwendet.
+- `WL_NS` (default `weblogic`): Default‑Namespace, das in Skripten injiziert wird, wenn kein `-n` angegeben ist.
+
+Empfehlung fürs User‑Shell‑Setup (`~/.bashrc`):
+
+```bash
+# Add project tools to PATH (project-local wrapper)
+export PATH="$HOME/dev_mk/ansible_mk/tools:$PATH"
+
+# Optionally override defaults
+export MK_PRF=wlcluster
+export WL_NS=weblogic
+```
+
+Warum das so gemacht ist: Aliasse in `~/.bashrc` sind für interaktive Shells; scripts laufen meist in non‑interactive shells
+und sehen keine aliases. Ein kleines ausführbares `kc` ist reproduzierbar, CI‑freundlich und vermeidet `eval` oder `source ~/.bashrc` in Skripten.
+

@@ -7,13 +7,10 @@ set -euo pipefail
 NAMESPACE="weblogic"
 KC_CMD="${KC_CMD:-kc}"
 
-while getopts ":n:k:" opt; do
-  case "$opt" in
-    n) NAMESPACE="$OPTARG" ;;
-    k) KC_CMD="$OPTARG" ;;
-    *) echo "Usage: $0 [-n namespace] [-k kc_cmd]"; exit 1 ;;
-  esac
-done
+# load shared helpers and parse common options (-n -k)
+source "$(dirname "$0")/common.sh"
+consumed=$(parse_common_args "$@") || exit 1
+shift "$consumed"
 
 echo "Checking pods in namespace: $NAMESPACE"
 for p in $($KC_CMD get pods -n "$NAMESPACE" -o jsonpath='{.items[*].metadata.name}'); do

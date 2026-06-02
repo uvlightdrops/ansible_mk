@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pattern Controller</title>
+  <link href="/www/style.css" rel="stylesheet">
+  <style>
+.pattern-desc { display: none; }
+#toggle-desc { font-size:0.92em; color:#888; background:transparent; border:none; cursor:pointer; padding:0 8px; }
+#track-select {
+  background: #1a1a28;
+  color: #dde1f0;
+  border: 1px solid #2a2a40;
+  border-radius: 10px;
+  padding: 9px 12px;
+  font-size: 1em;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+#track-select:focus {
+  outline: 2px solid #5b8dee;
+}
+</style>
+</head>
+<body>
+
+  <!-- STATUS BAR -->
+  <section class="status-bar">
+    <div class="status-item">
+      <span class="label">Track</span>
+      <span id="status-track" class="value">&#8211;</span>
+    </div>
+    <div class="status-item">
+      <span class="label">BPM</span>
+      <span id="status-bpm" class="value">&#8211;</span>
+    </div>
+    <div class="status-item wide">
+      <span class="label">Pattern</span>
+      <span id="status-pattern" class="value">&#8211;</span>
+    </div>
+  </section>
+
+  <!-- BPM -->
+  <section class="card">
+    <h2>BPM</h2>
+    <div class="bpm-controls">
+      <div class="slider-row" style="margin-bottom: 10px;">
+        <span class="slider-label">60</span>
+        <input type="range" id="bpm-slider" aria-label="BPM Schieberegler" min="60" max="400" value="120"
+               oninput="syncBpmFromSlider(this.value)" style="flex:1; min-width:0;">
+        <span class="slider-label">400</span>
+      </div>
+      <div class="bpm-input-flex" style="display:flex; gap:8px; align-items:center;">
+        <select id="bpm-select" aria-label="BPM" onchange="applyBpm(this.value)" style="max-width:110px; flex:0 0 auto;">
+          <option value="">Wähle</option>
+          <option value="100">100</option>
+          <option value="120">120</option>
+          <option value="130">130</option>
+          <option value="140">140</option>
+          <option value="150">150</option>
+          <option value="160">160</option>
+          <option value="180">180</option>
+          <option value="200">200</option>
+          <option value="220">220</option>
+          <option value="300">300</option>
+          <option value="1000">1000</option>
+          <option value="2000">2000</option>
+          <option value="5000">5000</option>
+        </select>
+        <input type="number" id="bpm-input" aria-label="BPM Eingabe" min="10" max="5000" value="120"
+               oninput="syncBpmFromInput(this.value)" style="max-width:110px; flex:0 0 auto;">
+        <span class="unit" style="margin-right:4px;">BPM</span>
+        <button onclick="applyBpm(document.getElementById('bpm-input').value)" style="max-width:50px; flex:0 0 auto;">Set</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- TRACK -->
+  <section class="card">
+    <h2>Track</h2>
+    <form id="track-form" onsubmit="submitTrack(event)" style="display: flex; gap: 8px; align-items: center; max-width: 320px;">
+      <select id="track-select" name="track" style="flex: 1 1 0; min-width: 120px;">
+        <option value="1">Track 1</option>
+        <option value="2">Track 2</option>
+        <option value="3">Track 3</option>
+      </select>
+      <button type="submit" style="flex: 0 0 auto; min-width: 90px;">Wechseln</button>
+    </form>
+  </section>
+
+  <!-- PATTERN -->
+  <section class="card">
+    <h2>Pattern</h2>
+    <form id="pattern-form" onsubmit="submitPattern(event)">
+      <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
+        <button type="submit">Übernehmen</button>
+        <button type="button" id="toggle-desc" style="font-size:0.92em; color:#888; background:transparent; border:none; cursor:pointer; padding:0 8px;">Beschreibungen anzeigen</button>
+      </div>
+      <ul id="pattern-list" class="pattern-list">
+        <!-- pattern items will be populated dynamically from /patterns -->
+      </ul>
+      </form>
+    </section>
+    <!-- dynamic area for patterns that are not available / warnings could be added here -->
+  </section>
+
+<script>
+// fetch available patterns from server and populate the pattern list
+function loadPatterns() {
+  fetch('/patterns')
+    .then(r => r.json())
+    .then(list => {
+      const ul = document.getElementById('pattern-list');
+      ul.innerHTML = '';
+      if (!Array.isArray(list) || list.length === 0) {
+        const li = document.createElement('li');
+        li.textContent = 'Keine Patterns verfügbar.';
+        ul.appendChild(li);
+        return;
+      }
+      list.forEach((p, idx) => {
+        const li = document.createElement('li');
+        const label = document.createElement('label');
+        const input = document.createElement('input');
+        input.type = 'radio';
+        input.name = 'pattern';
+        input.value = p;
+        if (idx === 0) input.checked = true;
+        label.appendChild(input);
+        label.appendChild(document.createTextNode(' ' + p));
+        li.appendChild(label);
+        ul.appendChild(li);
+      });
+    })
+    .catch(() => {
+      const ul = document.getElementById('pattern-list');
+      ul.innerHTML = '<li>Fehler beim Laden der Patterns.</li>';
+    });
+}
+window.addEventListener('load', loadPatterns);
+
+function submitPattern(e) {
+  e.preventDefault();
+  const selected = document.querySelector('input[name="pattern"]:checked');
+  if (selected) {
+    fetch('/pat/' + selected.value).catch(() => {});
+  }
+}
+
+// BPM
+function syncBpmFromSlider(v) {
+  document.getElementById('bpm-input').value  = v;
+  document.getElementById('bpm-select').value = '';
+}
+function syncBpmFromInput(v) {
+  document.getElementById('bpm-slider').value = v;
+  document.getElementById('bpm-select').value = '';
+}
+function applyBpm(v) {
+  v = parseInt(v);
+  if (!v || v < 10 || v > 5000) return;
+  document.getElementById('bpm-slider').value = v;
+  document.getElementById('bpm-input').value  = v;
+  document.getElementById('bpm-select').value = v;
+  fetch('/bpm/' + v).catch(() => {});
+}
+
+// Track
+function submitTrack(e) {
+  e.preventDefault();
+  const track = document.getElementById('track-select').value;
+  fetch('/track/' + track)
+    .then(() => location.reload())
+    .catch(() => {});
+}
+
+// Status-Polling alle 3s
+function refreshStatus() {
+  fetch('/status')
+    .then(r => r.json())
+    .then(d => {
+      document.getElementById('status-track').textContent   = d.track   || '\u2013';
+      document.getElementById('status-bpm').textContent     = d.bpm ? d.bpm : '\u2013';
+      document.getElementById('status-pattern').textContent = d.pattern || '\u2013';
+    })
+    .catch(() => {});
+}
+refreshStatus();
+setInterval(refreshStatus, 5000);
+
+// Pattern-Beschreibungen Toggle
+const toggleBtn = document.getElementById('toggle-desc');
+const descs = document.querySelectorAll('.pattern-desc');
+let descVisible = false;
+function updateDescVisibility() {
+  descs.forEach(d => d.style.display = descVisible ? '' : 'none');
+  toggleBtn.textContent = descVisible ? 'Beschreibungen ausblenden' : 'Beschreibungen anzeigen';
+}
+toggleBtn.addEventListener('click', function() {
+  descVisible = !descVisible;
+  updateDescVisibility();
+});
+updateDescVisibility();
+</script>
+
+</body>
+</html>

@@ -18,6 +18,10 @@ spec:
         emptyDir: {}
       - name: home
         emptyDir: {}
+      - name: weblogic-pubkeys
+        configMap:
+          name: weblogic-authorized-keys
+          defaultMode: 0644
       - name: gen-ssh-keys-script
         configMap:
           name: gen-ssh-keys-script
@@ -33,6 +37,9 @@ spec:
         volumeMounts:
           - name: ssh-keys
             mountPath: /etc/ssh
+          - name: weblogic-pubkeys
+            mountPath: /pubkeys
+            readOnly: true
           - name: gen-ssh-keys-script
             mountPath: /scripts
             readOnly: true
@@ -49,7 +56,10 @@ spec:
         - name: ssh-keys
           mountPath: /etc/ssh
         - name: home
-          mountPath: /home/weblogic
+          mountPath: /home/docker
+        - name: weblogic-pubkeys
+          mountPath: /pubkeys
+          readOnly: true
 ---
 apiVersion: v1
 kind: Service

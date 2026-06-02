@@ -9,15 +9,9 @@ KC_CMD="${KC_CMD:-kc}"
 DEPLOYMENTS="wls-admin wls-managed-1 wls-managed-2 wls-dev"
 TIMEOUT="120s"
 
-while getopts ":n:k:d:t:" opt; do
-  case "$opt" in
-    n) NAMESPACE="$OPTARG" ;;
-    k) KC_CMD="$OPTARG" ;;
-    d) DEPLOYMENTS="$OPTARG" ;;
-    t) TIMEOUT="$OPTARG" ;;
-    *) echo "Usage: $0 [-n namespace] [-k kc_cmd] [-d deployments] [-t timeout]"; exit 1 ;;
-  esac
-done
+source "$(dirname "$0")/common.sh"
+consumed=$(parse_common_args "$@") || exit 1
+shift "$consumed"
 
 for d in $DEPLOYMENTS; do
   echo "Restarting deployment/$d in namespace $NAMESPACE"

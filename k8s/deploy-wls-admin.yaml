@@ -21,6 +21,10 @@ spec:
       - name: domain-home
         persistentVolumeClaim:
           claimName: pvc-weblogic-home
+      - name: weblogic-pubkeys
+        configMap:
+          name: weblogic-authorized-keys
+          defaultMode: 0644
       - name: gen-ssh-keys-script
         configMap:
           name: gen-ssh-keys-script
@@ -41,6 +45,9 @@ spec:
           - name: gen-ssh-keys-script
             mountPath: /scripts
             readOnly: true
+          - name: weblogic-pubkeys
+            mountPath: /pubkeys
+            readOnly: true
 
       containers:
       - name: wls-admin
@@ -55,6 +62,9 @@ spec:
           mountPath: /etc/ssh
         - name: home
           mountPath: /home/docker
+        - name: weblogic-pubkeys
+          mountPath: /pubkeys
+          readOnly: true
         - name: domain-home
           mountPath: /u01/domains
 
