@@ -3,20 +3,33 @@
 generate_inventory.py
 Generate an Ansible YAML inventory (inventory.yaml) from `minikube -p <profile> node list`.
 Usage:
-  MK_PRF=wlcluster ANSIBLE_SSH_KEY=~/.ssh/id_ed25519 ./scripts/generate_inventory.py
+  MK_PRF=wlcluster ANSIBLE_SSH_KEY=~/.ssh/id_ed25519_docker ./scripts/generate_inventory.py
 If environment variables are not set, defaults are used:
   MK_PRF -> wlcluster
-  ANSIBLE_SSH_KEY -> ~/.ssh/id_ed25519
+  ANSIBLE_SSH_KEY -> ~/.ssh/id_ed25519_docker (if present), else ~/.ssh/id_ed25519
 """
 import os
 import re
-import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 PROFILE = os.environ.get("MK_PRF", "wlcluster")
-KEY_PATH = os.environ.get("ANSIBLE_SSH_KEY", str(Path.home() / ".ssh" / "id_ed25519"))
+
+
+def resolve_default_key_path() -> str:
+    env_key = os.environ.get("ANSIBLE_SSH_KEY")
+    if env_key:
+        return str(Path(env_key).expanduser())
+
+    docker_key = Path.home() / ".ssh" / "id_ed25519_docker"
+    if docker_key.exists():
+        return str(docker_key)
+
+    return str(Path.home() / ".ssh" / "id_ed25519")
+
+
+KEY_PATH = resolve_default_key_path()
 OUT_FILE = Path(__file__).resolve().parents[1] / "inventory.yaml"
 
 IP_RE = re.compile(r"(\d{1,3}(?:\.\d{1,3}){3})")
@@ -105,6 +118,7 @@ def write_inventory(nodes, key_path: str, out_file: Path):
             'wls-admin-node': 30222,
             'wls-managed-1-node': 30223,
             'wls-managed-2-node': 30224,
+            'wls-managed-3-node': 30225,
         }
         for host, port in ports.items():
             f.write(f"        {host}:\n")
@@ -120,6 +134,8 @@ def write_inventory(nodes, key_path: str, out_file: Path):
 
 def main():
     print(f"Generating inventory for minikube profile '{PROFILE}' (key: {KEY_PATH})")
+    if not Path(KEY_PATH).expanduser().exists():
+        print(f"Warning: SSH key does not exist: {KEY_PATH}", file=sys.stderr)
     try:
         out = run_minikube_list(PROFILE)
     except Exception:

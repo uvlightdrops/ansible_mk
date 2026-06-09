@@ -13,6 +13,8 @@ Wichtige Dateien
 - `k8s/pv.yaml`          - hostPath PersistentVolume (Dev)
 - `k8s/pvc-weblogic-home.yaml` - PersistentVolumeClaim (Domain home)
   (Hinweis: `k8s/pvc.yaml` ist veraltet/duplicat und wurde durch `pvc-weblogic-home.yaml` ersetzt.)
+- `k8s/deploy-wls-managed-1.yaml` / `k8s/deploy-wls-managed-2.yaml` / `k8s/deploy-wls-managed-3.yaml` - je ein Managed Server als separates StatefulSet
+  mit stabilem Pod-Namen; das passt zur manuellen Variante, in der der Admin-Server die Managed-Server namentlich kennt.
 - `k8s/domain.yaml`      - Minimal Domain CR Template
 
 Voraussetzungen
@@ -80,12 +82,13 @@ kubectl create configmap gen-ssh-keys-script --from-file=prepare_docker/gen-ssh-
 kc apply -f k8s/gen-ssh-keys-config.yaml
 ```
 
-- Nach Änderung des Scripts musst du die betroffenen Deployments neu starten, damit InitContainers wiederlaufen:
+- Nach Änderung des Scripts musst du die betroffenen Workloads neu starten, damit InitContainers wiederlaufen:
 
 ```bash
 kc rollout restart deployment/wls-admin -n weblogic
-kc rollout restart deployment/wls-managed-1 -n weblogic
-kc rollout restart deployment/wls-managed-2 -n weblogic
+kc rollout restart statefulset/wls-managed-1 -n weblogic
+kc rollout restart statefulset/wls-managed-2 -n weblogic
+kc rollout restart statefulset/wls-managed-3 -n weblogic
 ```
 
 Hilfs‑Skripte
@@ -96,13 +99,13 @@ Hilfs‑Skripte
 NodePort / SSH Zugriff
 ---------------------
 - Für den schnellen Zugang aus dem Hostnetz sind NodePort Services definiert in `k8s/services-nodeports.yaml`.
-  Diese öffnen die SSH‑Ports der Pods auf festen NodePorts (30222/30223/30224). Die `inventory.yaml` kann diese
+  Diese öffnen die SSH‑Ports der Pods auf festen NodePorts (30222/30223/30224/30225). Die `inventory.yaml` kann diese
   Node IP + NodePort Einträge verwenden, damit Ansible direkt per SSH verbindet.
 
 Aufräumen / Aufteilung der Manifeste
 -----------------------------------
 - Die frühere monolithische Datei `k8s/ubuntu-wls-deployments.yaml` wurde archiviert als
   `k8s/ubuntu-wls-deployments.deprecated.yaml`. Nutze stattdessen die aufgeteilten Manifeste:
-  `deploy-wls-admin.yaml`, `deploy-wls-managed-1.yaml`, `deploy-wls-managed-2.yaml`, `deploy-test-db.yaml`,
+  `deploy-wls-admin.yaml`, `deploy-wls-managed-1.yaml`, `deploy-wls-managed-2.yaml`, `deploy-wls-managed-3.yaml`, `deploy-test-db.yaml`,
   sowie `services-clusterip.yaml` / `services-nodeports.yaml`.
 

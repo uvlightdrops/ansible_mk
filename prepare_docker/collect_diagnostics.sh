@@ -62,6 +62,7 @@ for ns in $NAMESPACES; do
   $KC_CMD get ns "$ns" -o yaml > "$nsdir/namespace.yaml" 2>&1 || true
   $KC_CMD get pods -n "$ns" -o wide > "$nsdir/pods.txt" 2>&1 || true
   $KC_CMD get deploy -n "$ns" -o wide > "$nsdir/deployments.txt" 2>&1 || true
+  $KC_CMD get statefulset -n "$ns" -o wide > "$nsdir/statefulsets.txt" 2>&1 || true
   $KC_CMD get rs -n "$ns" -o wide > "$nsdir/replicasets.txt" 2>&1 || true
   $KC_CMD get svc -n "$ns" -o wide > "$nsdir/services.txt" 2>&1 || true
   $KC_CMD get pvc -n "$ns" -o wide > "$nsdir/pvcs.txt" 2>&1 || true
@@ -69,6 +70,7 @@ for ns in $NAMESPACES; do
   # save YAMLs
   $KC_CMD get pods -n "$ns" -o yaml > "$nsdir/pods.yaml" 2>&1 || true
   $KC_CMD get deploy -n "$ns" -o yaml > "$nsdir/deployments.yaml" 2>&1 || true
+  $KC_CMD get statefulset -n "$ns" -o yaml > "$nsdir/statefulsets.yaml" 2>&1 || true
   $KC_CMD get pvc -n "$ns" -o yaml > "$nsdir/pvcs.yaml" 2>&1 || true
 
   # iterate pods: describe + logs (use diag_common helper)

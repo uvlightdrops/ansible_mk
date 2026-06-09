@@ -41,11 +41,12 @@ class K8sOps:
         return self.kc.run(args)
 
     def rollout_restart(self, namespace: str, label_selector: Optional[str] = None):
-        # restart all deployments with label selector if provided
+        # restart deployments and statefulsets with label selector if provided
         if label_selector:
-            pods = self.get_pods(namespace, label_selector)
-            # best effort: restart deployments by label
-            return self.kc.run(["rollout", "restart", "deployment", "-n", namespace, "-l", label_selector])
+            # best effort: restart both workload types by label
+            self.kc.run(["rollout", "restart", "deployment", "-n", namespace, "-l", label_selector], check=False)
+            return self.kc.run(["rollout", "restart", "statefulset", "-n", namespace, "-l", label_selector], check=False)
         else:
-            return self.kc.run(["rollout", "restart", "deployment", "-n", namespace, "--all"])
+            self.kc.run(["rollout", "restart", "deployment", "-n", namespace, "--all"], check=False)
+            return self.kc.run(["rollout", "restart", "statefulset", "-n", namespace, "--all"], check=False)
 

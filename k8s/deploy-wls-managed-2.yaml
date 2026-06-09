@@ -1,10 +1,11 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: wls-managed-2
   namespace: weblogic
 spec:
   replicas: 1
+  serviceName: wls-managed-2-headless
   selector:
     matchLabels:
       app: wls-managed-2

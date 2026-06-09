@@ -5,33 +5,38 @@ all:
         wlcluster:
           ansible_host: 192.168.58.2
           ansible_user: docker
-          ansible_ssh_private_key_file: /home/flow/.ssh/id_ed25519
+          ansible_ssh_private_key_file: /home/flow/.ssh/id_ed25519_docker
     workers:
       hosts:
         wlcluster-m02:
           ansible_host: 192.168.58.3
           ansible_user: docker
-          ansible_ssh_private_key_file: /home/flow/.ssh/id_ed25519
+          ansible_ssh_private_key_file: /home/flow/.ssh/id_ed25519_docker
         wlcluster-m03:
           ansible_host: 192.168.58.4
           ansible_user: docker
-          ansible_ssh_private_key_file: /home/flow/.ssh/id_ed25519
+          ansible_ssh_private_key_file: /home/flow/.ssh/id_ed25519_docker
     weblogic_ssh:
       hosts:
         wls-admin-node:
           ansible_host: 192.168.58.2
           ansible_port: 30222
           ansible_user: docker
-          ansible_ssh_private_key_file: /home/flow/.ssh/id_ed25519
+          ansible_ssh_private_key_file: /home/flow/.ssh/id_ed25519_docker
         wls-managed-1-node:
           ansible_host: 192.168.58.2
           ansible_port: 30223
           ansible_user: docker
-          ansible_ssh_private_key_file: /home/flow/.ssh/id_ed25519
+          ansible_ssh_private_key_file: /home/flow/.ssh/id_ed25519_docker
         wls-managed-2-node:
           ansible_host: 192.168.58.2
           ansible_port: 30224
           ansible_user: docker
-          ansible_ssh_private_key_file: /home/flow/.ssh/id_ed25519
+          ansible_ssh_private_key_file: /home/flow/.ssh/id_ed25519_docker
+        wls-managed-3-node:
+          ansible_host: 192.168.58.2
+          ansible_port: 30225
+          ansible_user: docker
+          ansible_ssh_private_key_file: /home/flow/.ssh/id_ed25519_docker
 
 # You can add group_vars under group_vars/ directory or edit this file to add vars.

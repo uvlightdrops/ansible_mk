@@ -42,4 +42,19 @@ spec:
     nodePort: 30224
     protocol: TCP
   type: NodePort
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wls-managed-3-ssh-nodeport
+  namespace: weblogic
+spec:
+  selector:
+    app: wls-managed-3
+  ports:
+  - port: 22
+    targetPort: 22
+    nodePort: 30225
+    protocol: TCP
+  type: NodePort
 

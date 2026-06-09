@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Minimal helper: build wls-dev into Minikube's docker daemon and restart deployments
+# Minimal helper: build wls-dev into Minikube's docker daemon and restart workloads
 # No heavy checks; adjust env vars if needed
 
 MINIKUBE_PROFILE=${MINIKUBE_PROFILE:-wlcluster}
@@ -16,11 +16,12 @@ docker build -t "$IMAGE_TAG" images/wls-dev \
 echo "Loading image into minikube"
 minikube -p "$MINIKUBE_PROFILE" image load "$IMAGE_TAG"
 
-echo "Restarting WLS deployments in namespace $NAMESPACE"
-# adjust deployments list if you changed names
+echo "Restarting WLS workloads in namespace $NAMESPACE"
+# admin/test remain Deployments; managed servers are StatefulSets
 kc rollout restart deployment/wls-admin -n "$NAMESPACE" || true
-kc rollout restart deployment/wls-managed-1 -n "$NAMESPACE" || true
-kc rollout restart deployment/wls-managed-2 -n "$NAMESPACE" || true
+kc rollout restart statefulset/wls-managed-1 -n "$NAMESPACE" || true
+kc rollout restart statefulset/wls-managed-2 -n "$NAMESPACE" || true
+kc rollout restart statefulset/wls-managed-3 -n "$NAMESPACE" || true
 kc rollout restart deployment/wls-dev -n "$NAMESPACE" || true
 
 echo "Done. Check pods:"

@@ -44,7 +44,7 @@ if [ -z "$NODE_IP" ]; then
   exit 3
 fi
 
-SERVICES=(wls-admin-ssh-nodeport wls-managed-1-ssh-nodeport wls-managed-2-ssh-nodeport)
+SERVICES=(wls-admin-ssh-nodeport wls-managed-1-ssh-nodeport wls-managed-2-ssh-nodeport wls-managed-3-ssh-nodeport)
 
 echo "Testing SSH to Node $NODE_IP (namespace: $NAMESPACE) with user $SSH_USER"
 

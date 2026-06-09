@@ -7,17 +7,17 @@ data:
     echo "=== gen-ssh-keys START ===" >&2
     date >&2
 
-    # If the image provided /etc/ssh.orig, restore it when /etc/ssh is empty
+    # If image provides a backup of /etc/ssh, copy it into the (possibly empty) /etc/ssh
     if [ -d /etc/ssh.orig ] && [ -z "$(ls -A /etc/ssh 2>/dev/null)" ]; then
       echo "Restoring /etc/ssh from /etc/ssh.orig" >&2
       cp -av /etc/ssh.orig/* /etc/ssh || true
     fi
 
-    # Ensure host keys exist (useful when /etc/ssh is an emptyDir)
+    # Ensure host keys exist (works if /etc/ssh is an emptyDir)
     echo "Generating host keys if missing" >&2
     ssh-keygen -A || true
 
-    # Ensure user home .ssh exists and authorized_keys file
+    # Ensure .ssh exists (home is provided by the image) and authorized_keys file
     echo "Ensure /home/docker/.ssh and authorized_keys exist" >&2
     mkdir -p /home/docker/.ssh || true
     touch /home/docker/.ssh/authorized_keys || true
@@ -37,7 +37,7 @@ data:
       done
     fi
 
-    # Best-effort: set ownership and permissions (InitContainer normally runs as root)
+    # Best-effort: set ownership and permissions (InitContainer usually runs as root)
     if getent passwd docker >/dev/null 2>&1; then
       DOCKER_UID=$(getent passwd docker | cut -d: -f3)
       DOCKER_GID=$(getent passwd docker | cut -d: -f4)
@@ -47,6 +47,7 @@ data:
       echo "User 'docker' missing in image; fallback chown to 1000:1000" >&2
       chown -R 1000:1000 /home/docker || true
     fi
+    chmod 755 /home/docker || true
     chmod 700 /home/docker/.ssh || true
     chmod 600 /home/docker/.ssh/authorized_keys || true
 

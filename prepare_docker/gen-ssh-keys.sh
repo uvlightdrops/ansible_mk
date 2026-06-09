@@ -44,6 +44,7 @@ else
   echo "User 'docker' missing in image; fallback chown to 1000:1000" >&2
   chown -R 1000:1000 /home/docker || true
 fi
+chmod 755 /home/docker || true
 chmod 700 /home/docker/.ssh || true
 chmod 600 /home/docker/.ssh/authorized_keys || true
 

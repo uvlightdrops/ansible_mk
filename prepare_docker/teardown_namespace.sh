@@ -5,7 +5,8 @@ set -euo pipefail
 # Remove WebLogic k8s resources at the desired level.
 #
 # Levels (mutually exclusive, default: --resources):
-#   --soft        only delete Deployments; PVC/ConfigMaps/Services stay
+#   --scale-down  scale all workloads to 0 replicas (pods gone, everything else intact)
+#   --soft        delete Deployments/StatefulSets (PVC/ConfigMaps/Services stay; re-apply to bring back)
 #   --resources   delete all resources in namespace (deployments, svcs, configmaps, pvcs)
 #   --namespace   delete the entire namespace (fastest; all resources in one shot)
 #   --all         like --namespace + also delete cluster-scoped PV and StorageClass
@@ -13,7 +14,7 @@ set -euo pipefail
 # Extra flags:
 #   --purge-data  additionally wipe hostPath data on all minikube node containers
 #
-# Usage: ./teardown_namespace.sh [-n namespace] [-k kc_cmd] [--soft|--resources|--namespace|--all] [--purge-data] [--yes]
+# Usage: ./teardown_namespace.sh [-n namespace] [-k kc_cmd] [--scale-down|--soft|--resources|--namespace|--all] [--purge-data] [--yes]
 
 LEVEL="resources"
 PURGE_DATA=0
@@ -27,6 +28,7 @@ shift "$consumed"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
+    --scale-down)  LEVEL="scale-down"; shift ;;
     --soft)        LEVEL="soft";       shift ;;
     --resources)   LEVEL="resources";  shift ;;
     --namespace)   LEVEL="namespace";  shift ;;
@@ -35,10 +37,13 @@ while [ "$#" -gt 0 ]; do
     -y|--yes)      AUTO_YES=1;         shift ;;
     -h|--help)
       cat <<EOF
-Usage: $0 [-n namespace] [-k kc_cmd] [--soft|--resources|--namespace|--all] [--purge-data] [-y]
+Usage: $0 [-n namespace] [-k kc_cmd] [--scale-down|--soft|--resources|--namespace|--all] [--purge-data] [-y]
 
-Levels:
-  --soft        only delete Deployments (pods die; PVC/ConfigMaps/Services stay)
+Levels (gentlest → most destructive):
+  --scale-down  scale all workloads to 0 replicas (pods stop; everything else stays intact)
+                → bring back: kc scale deployment --all --replicas=1 -n $NAMESPACE
+                               kc scale statefulset --all --replicas=1 -n $NAMESPACE
+  --soft        delete Deployments/StatefulSets (PVC/ConfigMaps/Services stay; re-apply manifests to restore)
   --resources   (default) delete all resources in namespace (deploy, svcs, cm, pvc)
   --namespace   delete the entire namespace
   --all         like --namespace + delete cluster-scoped PV and StorageClass
@@ -64,9 +69,23 @@ fi
 
 # ── helpers ────────────────────────────────────────────────────────────────────
 
+do_scale_down() {
+  echo "-> Scaling all Deployments in $NAMESPACE to 0 replicas"
+  $KC_CMD scale deployment --all --replicas=0 -n "$NAMESPACE" || true
+  echo "-> Scaling all StatefulSets in $NAMESPACE to 0 replicas"
+  $KC_CMD scale statefulset --all --replicas=0 -n "$NAMESPACE" || true
+  echo "-> Waiting for pods to terminate..."
+  $KC_CMD wait pod --all -n "$NAMESPACE" --for=delete --timeout=60s 2>/dev/null || true
+  echo "-> All pods stopped. Workloads/Services/ConfigMaps/PVCs intact."
+  echo "   To bring pods back: $KC_CMD scale deployment --all --replicas=1 -n $NAMESPACE"
+  echo "                      $KC_CMD scale statefulset --all --replicas=1 -n $NAMESPACE"
+}
+
 do_soft() {
   echo "-> Deleting Deployments in $NAMESPACE"
   $KC_CMD delete deployment --all -n "$NAMESPACE" --ignore-not-found=true
+  echo "-> Deleting StatefulSets in $NAMESPACE"
+  $KC_CMD delete statefulset --all -n "$NAMESPACE" --ignore-not-found=true
 }
 
 do_resources() {
@@ -121,6 +140,9 @@ do_purge_data() {
 # ── execute level ──────────────────────────────────────────────────────────────
 
 case "$LEVEL" in
+  scale-down)
+    do_scale_down
+    ;;
   soft)
     do_soft
     ;;
@@ -145,5 +167,11 @@ fi
 
 echo ""
 echo "=== Teardown complete (level=$LEVEL) ==="
-echo "    To rebuild from scratch: ./prepare_docker/bootstrap_cluster.sh"
+if [ "$LEVEL" = "scale-down" ]; then
+  echo "    Bring back:  $KC_CMD scale deployment --all --replicas=1 -n $NAMESPACE"
+  echo "                 $KC_CMD scale statefulset --all --replicas=1 -n $NAMESPACE"
+  echo "    Or full rebuild: ./prepare_docker/bootstrap_cluster.sh --no-start --no-build"
+else
+  echo "    To rebuild from scratch: ./prepare_docker/bootstrap_cluster.sh"
+fi
 

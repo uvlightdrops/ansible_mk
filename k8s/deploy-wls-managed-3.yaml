@@ -1,18 +1,18 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: wls-managed-1
+  name: wls-managed-3
   namespace: weblogic
 spec:
   replicas: 1
-  serviceName: wls-managed-1-headless
+  serviceName: wls-managed-3-headless
   selector:
     matchLabels:
-      app: wls-managed-1
+      app: wls-managed-3
   template:
     metadata:
       labels:
-        app: wls-managed-1
+        app: wls-managed-3
     spec:
       volumes:
       - name: ssh-keys

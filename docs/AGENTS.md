@@ -60,7 +60,7 @@ ansible-playbook k8s_weblogic/deploy_weblogic.yml   # uses group_vars/all.yml
 python3 prepare_docker_py/cli.py restart -n weblogic
 python3 prepare_docker_py/cli.py get-pod -n weblogic -l app=wls-admin
 python3 prepare_docker_py/cli.py install-pubkey -n weblogic -l app=wls-admin -k ~/.ssh/id_ed25519_docker
-python3 prepare_docker_py/cli.py loop-test-ssh 192.168.58.2 --ports 30222,30223,30224 -k ~/.ssh/id_ed25519_docker
+python3 prepare_docker_py/cli.py loop-test-ssh 192.168.58.2 --ports 30222,30223,30224,30225 -k ~/.ssh/id_ed25519_docker
 ```
 
 ### Update gen-ssh-keys ConfigMap after script change
@@ -69,7 +69,10 @@ kubectl create configmap gen-ssh-keys-script \
   --from-file=prepare_docker/gen-ssh-keys.sh -n weblogic --dry-run=client -o yaml \
   > k8s/gen-ssh-keys-config.yaml
 kc apply -f k8s/gen-ssh-keys-config.yaml
-kc rollout restart deployment/wls-admin deployment/wls-managed-1 deployment/wls-managed-2 -n weblogic
+kc rollout restart deployment/wls-admin -n weblogic
+kc rollout restart statefulset/wls-managed-1 -n weblogic
+kc rollout restart statefulset/wls-managed-2 -n weblogic
+kc rollout restart statefulset/wls-managed-3 -n weblogic
 ```
 
 ### Log a change to HISTORY.md
@@ -82,10 +85,11 @@ python3 prepare_docker_py/cli.py log -m "describe what you changed"
 ## Key Conventions
 
 - **SSH user in all pods**: `docker`; private key `~/.ssh/id_ed25519_docker`
-- **NodePorts for SSH**: 30222 (wls-admin), 30223 (wls-managed-1), 30224 (wls-managed-2)
+- **NodePorts for SSH**: 30222 (wls-admin), 30223 (wls-managed-1), 30224 (wls-managed-2), 30225 (wls-managed-3)
+- **Managed Server topology**: `wls-managed-1`, `wls-managed-2` and `wls-managed-3` are separate `StatefulSet`s with one replica each; this gives stable pod names/DNS for manually defined WebLogic server identities
 - **PV hostPath**: `/mnt/weblogic/pv-home`, chowned to uid/gid `1000`; storage class `manual`
 - **`k8s/ubuntu-wls-deployments.yaml` is deprecated** – use the split manifests:  
-  `deploy-wls-admin.yaml`, `deploy-wls-managed-1.yaml`, `deploy-wls-managed-2.yaml`, `deploy-test-db.yaml`, `services-clusterip.yaml`, `services-nodeports.yaml`
+  `deploy-wls-admin.yaml`, `deploy-wls-managed-1.yaml`, `deploy-wls-managed-2.yaml`, `deploy-wls-managed-3.yaml`, `deploy-test-db.yaml`, `services-clusterip.yaml`, `services-nodeports.yaml`
 - **`k8s/pvc.yaml` is deprecated** – use `k8s/pvc-weblogic-home.yaml`
 - All central Ansible variables live in `group_vars/all.yml` (`namespace`, `weblogic_image`, `pv_host_path`, etc.); secrets should be stored in Ansible Vault
 - `prepare_docker_py/kc.py` resolves `kc` via `KC_CMD` env var; always set this before running the CLI against a non-default cluster

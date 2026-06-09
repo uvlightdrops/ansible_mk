@@ -7,6 +7,8 @@ ssh-keygen -A || true
 # best-effort fix ownerships for /home/docker and /home/weblogic
 chown -R docker:docker /home/docker || true
 chown -R weblogic:weblogic /home/weblogic || true
+chmod 755 /home/docker || true
+chmod 755 /home/weblogic || true
 
 # ensure .ssh exists and permissions are sane
 mkdir -p /home/docker/.ssh
