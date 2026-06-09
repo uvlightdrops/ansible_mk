@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CONTAINER_PREFIX="wlcluster"
+CONTAINER_PREFIX="${CONTAINER_PREFIX:-${MK_PRF:-wlcluster}}"
 #SSH_USER="flow"
 SSH_USER="docker"
 KEYFILE=id_ed25519_docker.pub
-PUBKEY_PATH="${HOME}/.ssh/${KEYFILE}"
+PUBKEY_PATH="${PUBKEY_PATH:-${HOME}/.ssh/${KEYFILE}}"
 echo "PUBKEY_PATH = $PUBKEY_PATH"
 DISABLE_PASSWORD_AUTH=true   # true = deaktiviert PasswordAuthentication in sshd_config
 

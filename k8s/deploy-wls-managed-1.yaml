@@ -53,8 +53,12 @@ spec:
       - name: wls-managed
         image: wls-dev:1.3
         imagePullPolicy: IfNotPresent
+        # Must run as root so sshd can bind port 22 and access host keys.
+        # Same reasoning as wls-admin; entrypoint.sh drops to docker user for the CMD.
         securityContext:
-          runAsUser: 1000
+          runAsUser: 0
+        # Override CMD: keep container alive while sshd runs in background (entrypoint.sh).
+        args: ["sleep", "infinity"]
         ports:
         - containerPort: 22
         volumeMounts:

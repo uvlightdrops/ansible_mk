@@ -33,5 +33,7 @@ COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
-CMD ["/bin/bash"]
+# Keep container alive while sshd runs in the background.
+# Use 'sleep infinity' so the container does not exit when there is no TTY.
+CMD ["sleep", "infinity"]
 

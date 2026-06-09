@@ -1,16 +1,8 @@
-# Example ConfigMap for injecting public SSH keys into Pods at /pubkeys
-# Usage (generate from your local pubkey and apply):
-# kc create configmap weblogic-authorized-keys \
-#   --from-file=id_ed25519_docker.pub=~/.ssh/id_ed25519_docker.pub \
-#   -n weblogic --dry-run=client -o yaml > k8s/weblogic-authorized-keys.yaml
-# kc apply -f k8s/weblogic-authorized-keys.yaml
-
 apiVersion: v1
+data:
+  id_ed25519_docker.pub: |
+    ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKdp/XDFuXTy8xjyvpb2Fr1Lf6NbDiC3QDpA8kQH0tkd docker@flowops
 kind: ConfigMap
 metadata:
   name: weblogic-authorized-keys
   namespace: weblogic
-data:
-  # key file names will be mounted under /pubkeys in the Pod ##  ~/.ssh/id_ed25519_docker.pub
-  id_ed25519_docker.pub: |
-    ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKdp/XDFuXTy8xjyvpb2Fr1Lf6NbDiC3QDpA8kQH0tkd docker@flowops
