@@ -145,6 +145,7 @@ apply k8s/services-nodeports.yaml
 apply k8s/deploy-wls-admin.yaml
 apply k8s/deploy-wls-managed-1.yaml
 apply k8s/deploy-wls-managed-2.yaml
+apply k8s/deploy-wls-managed-3.yaml
 apply k8s/deploy-test-db.yaml
 
 echo "  All manifests applied."
@@ -162,7 +163,7 @@ fi
 # ── Phase 6: wait for pods ────────────────────────────────────────────────────
 if [ "$DO_WAIT" -eq 1 ]; then
   step "Phase 6/7 – Waiting for pods (timeout=$WAIT_TIMEOUT)"
-  for label in app=wls-admin app=wls-managed-1 app=wls-managed-2 app=test-db; do
+  for label in app=wls-admin app=wls-managed-1 app=wls-managed-2 app=wls-managed-3 app=test-db; do
     printf "  waiting: %-25s ... " "-l $label"
     if $KC_CMD wait pod -l "$label" -n "$NAMESPACE" \
          --for=condition=ready --timeout="$WAIT_TIMEOUT" 2>/dev/null; then
@@ -193,7 +194,7 @@ if [ "$DO_SSH_TEST" -eq 1 ]; then
   else
     SSH_OPTS="-o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
     all_ok=1
-    for port in 30222 30223 30224; do
+    for port in 30222 30223 30224 30225; do
       printf "  docker@%s:%s  ... " "$NODE_IP" "$port"
       # shellcheck disable=SC2086
       if ssh $SSH_OPTS -i "$PRIVKEY" -p "$port" docker@"$NODE_IP" 'echo SSH_OK' >/dev/null 2>&1; then
@@ -207,7 +208,7 @@ if [ "$DO_SSH_TEST" -eq 1 ]; then
       echo ""
       echo "  Some SSH tests failed. The pod may still be initializing."
       echo "  Retry: PYTHONPATH=. python3 prepare_docker_py/cli.py loop-test-ssh $NODE_IP \\"
-      echo "           --ports 30222,30223,30224 -k $PRIVKEY"
+      echo "           --ports 30222,30223,30224,30225 -k $PRIVKEY"
     fi
   fi
 else

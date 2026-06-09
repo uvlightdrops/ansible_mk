@@ -15,3 +15,32 @@ wlcluster-m02   NotReady   <none>          77m   v1.35.0
 wlcluster-m03   NotReady   <none>          75m   v1.35.0
 wlcluster-m04   NotReady   <none>          74m   v1.35.0
 
+
+Uebersicht: Herunterfahren & Hochfahren
+=======================================
+
+Schnell herunterfahren (nur WebLogic-Resources im Namespace loeschen):
+  ./prepare_docker/teardown_namespace.sh -n weblogic --resources -y
+
+Komplett aufraeumen (Namespace + PV/StorageClass + HostPath-Daten):
+  ./prepare_docker/teardown_namespace.sh -n weblogic --all --purge-data -y
+
+Nur Storage neu aufsetzen (nach --all teardown, Cluster laeuft noch):
+  ./prepare_docker/recreate_storage.sh -n weblogic --purge-data -y
+  # danach Manifeste + Pods re-applyen (kein rebuild noetig):
+  ./prepare_docker/bootstrap_cluster.sh --no-start --no-build
+
+Cluster nur stoppen (ohne Loeschen):
+  minikube stop -p wlcluster
+
+Cluster wieder hochfahren (bestehender Cluster):
+  ./prepare_docker/bootstrap_cluster.sh --no-start
+
+Von Null neu aufsetzen (Cluster starten + Build + Apply + SSH-Test):
+  ./prepare_docker/bootstrap_cluster.sh
+
+Nach dem Hochfahren pruefen:
+  kc get pods -n weblogic -o wide
+  bash prepare_docker/loop_test_ssh.sh -i ~/.ssh/id_ed25519_docker -t 5
+
+
