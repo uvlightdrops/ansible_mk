@@ -1,7 +1,7 @@
 from datetime import datetime
 import os
 
-HISTORY_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'HISTORY.md'))
+HISTORY_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'docs', 'HISTORY.md'))
 
 
 def append_entry(text: str):

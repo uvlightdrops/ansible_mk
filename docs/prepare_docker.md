@@ -38,6 +38,8 @@ Neu hinzugefügte helper‑Skripte (repo)
 - `restart_wls_rollouts.sh` — startet Rollouts für `wls-admin`, `wls-managed-1`, `wls-managed-2`, `wls-dev` und wartet auf Status.
 - `gen_configmap_from_script.sh` — generiert `k8s/gen-ssh-keys-config.yaml` aus `prepare_docker/gen-ssh-keys.sh` und wendet die ConfigMap an.
 
+ - `reap_terminating.sh` — versucht Pods im `Terminating` Zustand aufzuräumen: normales Löschen, kurz warten,
+   bei Bedarf Finalizer entfernen und force-delete. Usage: `./reap_terminating.sh -n weblogic`.
 Ordner mit Ausgaben
 - `out.diagnostics/` — Ergebnisse von `collect_minikube_diagnostics.sh`.
 - `out.mk/` — zusätzliche projektspezifische Outputs (z. B. minikube diagnostics cached).
@@ -136,6 +138,20 @@ export WL_NS=weblogic
 Warum das so gemacht ist: Aliasse in `~/.bashrc` sind für interaktive Shells; scripts laufen meist in non‑interactive shells
 und sehen keine aliases. Ein kleines ausführbares `kc` ist reproduzierbar, CI‑freundlich und vermeidet `eval` oder `source ~/.bashrc` in Skripten.
 
+Python CLI
+----------
+
+Es gibt eine kleine Python‑Toolchain unter `prepare_docker_py/` mit einem CLI‑Entrypoint. Ein wrapper `tools/pd` startet
+die CLI so, dass du z.B. `pd loop-install-pubkey -n weblogic` verwenden kannst.
+
+Beispiel:
+```bash
+chmod +x tools/pd
+tools/pd get-pod -n weblogic
+tools/pd loop-install-pubkey -n weblogic -k ~/.ssh/id_ed25519_docker
+```
+
+
 
 ## Dateien im Detail: `k8s/gen-ssh-keys-config.yaml` und `prepare_docker/gen-ssh-keys.sh`
 
@@ -171,5 +187,147 @@ kc apply -f k8s/gen-ssh-keys-config.yaml
 POD=$(kc get pods -n weblogic -l app=wls-admin -o jsonpath='{.items[0].metadata.name}')
 kc logs -n weblogic $POD -c gen-ssh-keys --tail=200
 ```
+ 
+Erweiterte Diagnose (komplexere Befehle)
+--------------------------------------
+
+Wenn ein Rollout hängt oder ein Pod im CrashLoop/BackOff ist, helfen die folgenden Befehle, die Ursache systematisch zu finden und zu reparieren. Führe die Befehle nacheinander aus und lese die Ausgaben aufmerksam.
+
+1) Pods / Übersicht
+```bash
+kc get pods -n weblogic -o wide
+```
+
+2) Detaillierte Pod‑Beschreibung (Events)
+```bash
+kc describe pod -n weblogic $POD
+```
+
+3) Aktuelle Events (letzte 40)
+```bash
+kc get events -n weblogic --sort-by=.lastTimestamp | tail -n 40
+```
+
+4) InitContainer‑Logs (gen-ssh-keys)
+```bash
+kc logs -n weblogic $POD -c gen-ssh-keys --tail=300
+```
+
+5) Main container Logs (falls vorhanden / vorherige Instanz)
+```bash
+kc logs -n weblogic $POD -c wls-admin --tail=300
+kc logs -n weblogic $POD -c wls-admin --previous --tail=300 || true
+```
+
+6) Prüfe geteilte Volumes in Pod (mounts/volumes)
+```bash
+kc get pod -n weblogic $POD -o yaml | sed -n '1,240p' | sed -n '/volumeMounts:/,/env:/p'
+kc get pod -n weblogic $POD -o yaml | sed -n '1,240p' | sed -n '/volumes:/,/status:/p'
+```
+
+7) Untersuche Inhalt der geteilten Volumes mit einem Ephemeral/Debug Container
+```bash
+kc debug -n weblogic pod/$POD -it --image=alpine -- sh -c 'ls -la /etc/ssh || true; stat -c "%n %U:%G %a" /etc/ssh/ssh_host_* 2>/dev/null || true; ls -la /home/docker/.ssh || true; sed -n "1,40p" /home/docker/.ssh/authorized_keys || true'
+```
+
+8) Erzeuge einmalig Host‑Keys im shared volume (falls fehlen)
+```bash
+kc debug -n weblogic pod/$POD -it --image=alpine -- sh -c 'apk add --no-cache openssh >/dev/null 2>&1 || true; ssh-keygen -A || true; ls -la /etc/ssh; stat -c "%n %U:%G %a" /etc/ssh/ssh_host_*'
+```
+
+### Aufräumen: Pods im "Terminating" Zustand
+
+Wenn Pods nicht verschwinden (z.B. `kubectl get pods` zeigt `Terminating` bzw. `deletionTimestamp` gesetzt), hilft das Script `prepare_docker/reap_terminating.sh`.
+
+Kurzfunktionalität:
+- versucht zuerst ein normales `kubectl delete pod`;
+- wartet (default 10s);
+- wenn Pod noch vorhanden, versucht `patch` um Finalizer zu entfernen und macht ein force-delete.
+
+Beispiel:
+```bash
+./prepare_docker/reap_terminating.sh -n weblogic
+```
+
+Warnung: force-delete kann zu inkonsistentem Zustand bei Stateful Volumes führen — nutze nur wenn normaler Delete fehlschlägt.
+
+## Neues: strukturierte Diagnostics Sammlung
+
+Ein neues Script `prepare_docker/collect_diagnostics.sh` sammelt cluster- und namespace‑weit
+Diagnosedaten und schreibt sie in ein timestamped Verzeichnis unter `out.diagnostics/`.
+
+Kurz: es erzeugt `out.diagnostics/<YYYYMMDDTHHMMSSZ>/` mit Unterverzeichnissen pro Namespace
+(`ns-<name>`) und je Pod ein Verzeichnis mit `describe.txt`, `pod.yaml` und `log.*.txt` Dateien.
+
+Usage (einfach):
+```bash
+# Namespace-spezifisch
+./prepare_docker/collect_diagnostics.sh -n weblogic
+
+# Alle Namespaces (länger)
+./prepare_docker/collect_diagnostics.sh -a
+
+# Optional: nach Sammeln Reap ausführen (versucht Terminating Pods aufzuräumen)
+./prepare_docker/collect_diagnostics.sh -n weblogic --reap
+```
+
+Ergebnis: Ein Archivierbares `out.diagnostics/<ts>/` mit allen relevanten Outputs, das du
+z.B. an Kollegen oder in ein Issue anhängen kannst.
+
+CrashLoop‑Diagnose
+------------------
+
+Ein neues spezialisiertes Script `prepare_docker/diagnose_crashloops.sh` sammelt gezielt
+Informationen für Pods im `CrashLoopBackOff` Zustand. Es legt pro Pod ein Verzeichnis
+an mit `describe.txt`, `pod.yaml`, `node.describe.txt`, `log.<container>.txt`,
+`log.<container>.previous.txt` und `events.txt`.
+
+Usage (kurz):
+```bash
+# Namespace-spezifisch
+./prepare_docker/diagnose_crashloops.sh -n weblogic
+
+# Alle Namespaces
+./prepare_docker/diagnose_crashloops.sh -a
+
+# Anpassen: tail lines und output dir
+./prepare_docker/diagnose_crashloops.sh -n weblogic -t 200 -o out.diagnostics/custom
+```
+
+Die Ausgabe landet unter `out.diagnostics/<timestamp>/crashloops/` (oder deinem `-o` Ziel).
+
+
+
+9) Korrigiere Rechte best‑effort (falls Host‑Keys vorhanden, aber falsche Owner/Perms)
+```bash
+kc debug -n weblogic pod/$POD -it --image=alpine -- sh -c 'chown root:root /etc/ssh/ssh_host_* 2>/dev/null || true; chmod 600 /etc/ssh/ssh_host_* 2>/dev/null || true; chown -R docker:docker /home/docker || true; chmod 700 /home/docker/.ssh || true; chmod 600 /home/docker/.ssh/authorized_keys || true'
+```
+
+Diagnose‑Beispiele (gemeldet vom Operator)
+-----------------------------------------
+Die folgenden Ausgaben wurden während der Fehlersuche berichtet — sie sind beispielhafte Hinweise, was typischerweise schief läuft:
+
+- Pod BackOff / kubelet Warning (zeigt, dass der Hauptcontainer wiederholt crasht):
+
+  Warning  BackOff    2m22s (x41 over 42m)  kubelet            spec.containers{wls-admin}: Back-off restarting failed container wls-admin in pod wls-admin-84f7955bfc-n5c9l_weblogic(...)
+
+- InitContainer lief durch (Ende‑Marker):
+
+  === gen-ssh-keys END ===
+  Tue Jun  2 12:14:36 UTC 2026
+
+- Main container Log: sshd bricht ab wegen fehlender Host‑Keys:
+
+  sshd: no hostkeys available -- exiting.
+
+Und ein früherer Hinweis auf Permission‑Probleme beim Lesen der authorized_keys:
+
+  sed: can't read /home/docker/.ssh/authorized_keys: Permission denied
+
+Diese Meldungen deuten auf ein Problem mit dem geteilten `/etc/ssh` Volume oder mit Owner/Perms 
+des Home‑Verzeichnisses hin — die obigen Debug‑Befehle (Ephemeral Container + ssh-keygen) helfen, 
+den Zustand zu reparieren.
+
+
 
 

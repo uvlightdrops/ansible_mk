@@ -53,8 +53,10 @@ spec:
       - name: wls-admin
         image: wls-dev:1.3
         imagePullPolicy: IfNotPresent
+        # The container must start as root so sshd can access host keys and bind low ports.
+        # The process (weblogic) may drop privileges later if needed.
         securityContext:
-          runAsUser: 1000
+          runAsUser: 0
         ports:
         - containerPort: 22
         volumeMounts:
