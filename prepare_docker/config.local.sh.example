@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# config.local.sh  –  machine-specific overrides for prepare_docker scripts
+#
+# USAGE
+#   cp prepare_docker/config.local.sh.example prepare_docker/config.local.sh
+#   then edit the values below for your local environment.
+#
+# This file is loaded automatically by common.sh AFTER config.defaults.sh,
+# so every value here wins over the defaults.
+# The file is listed in .gitignore; never commit it.
+#
+# After editing, regenerate the Ansible inventory:
+#   MK_PRF=$MK_PRF_DEFAULT ANSIBLE_SSH_KEY=$PRIVKEY_DEFAULT \
+#     ./scripts/generate_inventory.py
+
+# ── Minikube profile ──────────────────────────────────────────────────────────
+# Name of the minikube profile used by this machine.
+# Each machine/user should use a unique profile if sharing a Docker daemon.
+MK_PRF_DEFAULT="wlcluster"           # e.g. "wlcluster2" on the second host
+
+# Number of minikube nodes to create (affects bootstrap_cluster.sh phase 1).
+MK_NODES_DEFAULT="3"
+
+# ── Kubernetes namespace ──────────────────────────────────────────────────────
+NAMESPACE_DEFAULT="weblogic"
+
+# ── SSH keys ──────────────────────────────────────────────────────────────────
+# Paths must be absolute and already exist before running bootstrap_cluster.sh.
+PUBKEY_DEFAULT="${HOME}/.ssh/id_ed25519_docker.pub"
+PRIVKEY_DEFAULT="${HOME}/.ssh/id_ed25519_docker"
+
+# ── Docker image ──────────────────────────────────────────────────────────────
+WLS_IMAGE_TAG_DEFAULT="wls-dev:1.3"
+
+# ── Persistent Volume path on minikube nodes ──────────────────────────────────
+# hostPath directory created inside each minikube node container.
+PV_PATH_DEFAULT="/mnt/weblogic/pv-home"
+
+# ── Auto-confirm destructive operations ───────────────────────────────────────
+# Set to 1 to skip all "Continue? [y/N]" prompts (useful in CI).
+AUTO_YES_DEFAULT="0"
+

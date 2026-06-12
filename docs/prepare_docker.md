@@ -21,8 +21,41 @@ Logische Gliederung (Aspekte)
 
 Zentrale Konfiguration (Defaults)
 - Gemeinsame Standardwerte liegen in `prepare_docker/config.defaults.sh` (z. B. `NAMESPACE_DEFAULT`, `MK_PRF_DEFAULT`, `PV_PATH_DEFAULT`, `AUTO_YES_DEFAULT`).
-- Optional kannst du lokale Overrides in `prepare_docker/config.local.sh` hinterlegen.
+- **Maschinenspezifische Overrides** (anderes Netzwerk, anderer SSH-Key-Pfad, anderer Minikube-Profilname) kommen in `prepare_docker/config.local.sh` (nicht im Git, liegt in `.gitignore`).
+  - Template: `prepare_docker/config.local.sh.example` → einfach kopieren und anpassen.
 - Alle Scripts laden diese Defaults ueber `prepare_docker/common.sh`; CLI-Argumente haben weiterhin Vorrang.
+
+### Zweiten Host einrichten (andere Netzwerkumgebung)
+
+```bash
+# 1) Lokale Overrides anlegen (einmalig pro Maschine)
+cp prepare_docker/config.local.sh.example prepare_docker/config.local.sh
+#    -> MK_PRF_DEFAULT, PUBKEY_DEFAULT, PRIVKEY_DEFAULT etc. anpassen
+
+# 2) Cluster starten und Bootstrap durchführen
+./prepare_docker/bootstrap_cluster.sh
+
+# 3) Inventory frisch generieren (holt die aktuellen IPs aus minikube)
+MK_PRF=wlcluster ANSIBLE_SSH_KEY=~/.ssh/id_ed25519_docker \
+  ./scripts/generate_inventory.py
+#    -> schreibt inventory.yaml (steht in .gitignore, nie committen)
+
+# 4) Ansible ausführen
+ansible-playbook -i inventory.yaml ansible/bootstrap_nodes.yml
+```
+
+**Was maschinenspezifisch ist und nie committet wird:**
+| Datei | Inhalt |
+|---|---|
+| `prepare_docker/config.local.sh` | Minikube-Profil, Key-Pfade, PV-Pfad |
+| `inventory.yaml` | IPs der Minikube-Nodes (automatisch generiert) |
+
+**Was ins Repo gehört (maschinen-unabhängig):**
+| Datei | Inhalt |
+|---|---|
+| `prepare_docker/config.defaults.sh` | sinnvolle Defaults |
+| `prepare_docker/config.local.sh.example` | kommentiertes Template |
+| `group_vars/all.yml` | Ansible-Variablen ohne IPs/Pfade |
 
 Logische Bereiche (Commands)
 - `check`: einzelner Check, z. B. `check basic|home|ssh|nodeport`
