@@ -51,7 +51,7 @@ Notes/Comments
 
 Helper scripts
 --------------
-- `prepare_docker/deploy-ssh-keys.sh` — creates `/home/docker/.ssh` inside Minikube node containers, copies `setup_user.sh` and your public key, and prepares hostPath PV directories (chown to uid 1000).
+- `prepare_docker/pd/deploy-ssh-keys.sh` — creates `/home/docker/.ssh` inside Minikube node containers, copies `setup_user.sh` and your public key, and prepares hostPath PV directories (chown to uid 1000).
 - `prepare_docker/fix_wls_pods.sh` — convenience script to restart deployments and idempotently ensure the public key is present in each pod's `/home/docker/.ssh/authorized_keys`.
 
 If you want, I can also add more example tasks (installing Java, copying WebLogic binaries, etc.).

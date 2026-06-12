@@ -7,16 +7,12 @@ set -euo pipefail
 #   (no flag)   minikube stop  — suspends cluster, full state preserved
 #   --pause     minikube pause — freezes VMs without stopping (faster resume, less RAM freed)
 
-MK_PRF="${MK_PRF:-wlcluster}"
 MODE="stop"
 
-while [ "$#" -gt 0 ]; do
-  case "$1" in
-    --pause)          MODE="pause";   shift ;;
-    --profile|-p)     MK_PRF="$2";   shift 2 ;;
-    -h|--help)
-      cat <<EOF
-Usage: $0 [--pause] [--profile PROFILE]
+source "$(dirname "$0")/common.sh"
+
+mk_stop_usage_extra() {
+  cat <<EOF
   (default)  minikube stop -p PROFILE  — full stop, state preserved, RAM freed
   --pause    minikube pause -p PROFILE — freeze VMs (faster resume, RAM stays allocated)
 
@@ -24,10 +20,22 @@ Bring back:
   ./prepare_docker/mk_start.sh        (after stop)
   minikube unpause -p PROFILE         (after pause)
 EOF
-      exit 0 ;;
-    *) echo "Unknown arg: $1" >&2; exit 2 ;;
+}
+
+help_mk_stop() {
+  usage_render_script "$0 [--pause] [--profile PROFILE]" mk_stop_usage_extra
+  exit 0
+}
+
+parse_mk_stop_arg() {
+  case "$1" in
+    --pause)          MODE="pause";   PARSE_ARG_CONSUMED=1; return 0 ;;
+    --profile|-p)     MK_PRF="$2";   PARSE_ARG_CONSUMED=2; return 0 ;;
+    *) return 1 ;;
   esac
-done
+}
+
+parse_script_args help_mk_stop parse_mk_stop_arg "$@" || exit $?
 
 case "$MODE" in
   stop)

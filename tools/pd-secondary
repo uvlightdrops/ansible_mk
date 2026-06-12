@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Secondary wrapper to call the Python CLI.
+# This path may lag behind the shell orchestrator by design.
+# Usage: pd-secondary <subcommand> [args]
+
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
+
+PYTHON=${PYTHON:-python3}
+CLI_PATH="$REPO_ROOT/prepare_docker_py/cli.py"
+
+if [ ! -f "$CLI_PATH" ]; then
+  echo "prepare_docker_py CLI not found at $CLI_PATH" >&2
+  exit 2
+fi
+
+exec "$PYTHON" "$CLI_PATH" "$@"
+

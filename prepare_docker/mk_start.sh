@@ -5,16 +5,30 @@ set -euo pipefail
 # Start (or resume) the minikube wlcluster.
 # Usage: ./mk_start.sh [--profile PROFILE] [--nodes N]
 
-MK_PRF="${MK_PRF:-wlcluster}"
-MK_NODES="${MK_NODES:-3}"
 
-while [ "$#" -gt 0 ]; do
+source "$(dirname "$0")/common.sh"
+
+mk_start_usage_extra() {
+  cat <<EOF
+  --profile PROFILE   minikube profile (default: wlcluster)
+  --nodes N           minikube node count (default: 3)
+EOF
+}
+
+help_mk_start() {
+  usage_render_script "$0 [--profile PROFILE] [--nodes N]" mk_start_usage_extra
+  exit 0
+}
+
+parse_mk_start_arg() {
   case "$1" in
-    --profile|-p) MK_PRF="$2"; shift 2 ;;
-    --nodes)      MK_NODES="$2"; shift 2 ;;
-    *) echo "Unknown arg: $1" >&2; exit 2 ;;
+    --profile|-p) MK_PRF="$2"; PARSE_ARG_CONSUMED=2; return 0 ;;
+    --nodes)      MK_NODES="$2"; PARSE_ARG_CONSUMED=2; return 0 ;;
+    *) return 1 ;;
   esac
-done
+}
+
+parse_script_args help_mk_start parse_mk_start_arg "$@" || exit $?
 
 if minikube status -p "$MK_PRF" --format='{{.Host}}' 2>/dev/null | grep -q "^Running$"; then
   echo "Cluster '$MK_PRF' is already running."

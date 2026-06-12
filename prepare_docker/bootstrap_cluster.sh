@@ -9,7 +9,7 @@ set -euo pipefail
 #   2. Build wls-dev image + load into minikube
 #   3. Regenerate k8s/weblogic-authorized-keys.yaml from current pubkey
 #   4. Apply all k8s manifests in dependency order
-#   5. Prepare SSH on minikube node containers (deploy-ssh-keys.sh)
+#   5. Prepare SSH on minikube node containers (pd/deploy-ssh-keys.sh)
 #   6. Wait for all pods to become Ready
 #   7. Quick SSH connectivity check via NodePorts
 #
@@ -23,17 +23,12 @@ set -euo pipefail
 #   --image-tag TAG     docker image tag (default: wls-dev:1.3)
 #   --no-start          skip phase 1 (minikube start)
 #   --no-build          skip phase 2 (image build + load)
+#   --force-build       always rebuild image in phase 2 (ignore smart-build cache)
 #   --no-ssh-prep       skip phase 5 (SSH key prep on nodes)
 #   --no-wait           skip phase 6 (pod readiness wait)
 #   --no-ssh-test       skip phase 7 (SSH test)
 #   --wait-timeout T    pod wait timeout (default: 180s)
 
-NAMESPACE="weblogic"
-MK_PRF="${MK_PRF:-wlcluster}"
-MK_NODES="${MK_NODES:-3}"
-PUBKEY="${PUBKEY:-${HOME}/.ssh/id_ed25519_docker.pub}"
-PRIVKEY="${PRIVKEY:-${HOME}/.ssh/id_ed25519_docker}"
-IMAGE_TAG="${IMAGE_TAG:-wls-dev:1.3}"
 WAIT_TIMEOUT="180s"
 
 DO_START=1
@@ -41,32 +36,64 @@ DO_BUILD=1
 DO_SSH_PREP=1
 DO_WAIT=1
 DO_SSH_TEST=1
+FORCE_BUILD=0
 
 source "$(dirname "$0")/common.sh"
-consumed=$(parse_common_args "$@") || exit 1
-shift "$consumed"
 
-while [ "$#" -gt 0 ]; do
+bootstrap_usage_extra() {
+  cat <<EOF
+  --profile PROFILE   minikube profile (default: wlcluster)
+  --nodes N           minikube node count for new cluster (default: 3)
+  --pubkey PATH       public key to inject into pods (default: ~/.ssh/id_ed25519_docker.pub)
+  --privkey PATH      private key for SSH test (default: ~/.ssh/id_ed25519_docker)
+  --image-tag TAG     docker image tag (default: wls-dev:1.3)
+  --no-start          skip phase 1 (minikube start)
+  --no-build          skip phase 2 (image build + load)
+  --force-build       always rebuild image in phase 2 (ignore smart-build cache)
+  --no-ssh-prep       skip phase 5 (SSH key prep on nodes)
+  --no-wait           skip phase 6 (pod readiness wait)
+  --no-ssh-test       skip phase 7 (SSH test)
+  --wait-timeout T    pod wait timeout (default: 180s)
+EOF
+}
+
+help_bootstrap_cluster() {
+  usage_render_script "$0 [options]" bootstrap_usage_extra
+  exit 0
+}
+
+parse_bootstrap_cluster_arg() {
   case "$1" in
-    --profile)      MK_PRF="$2";        shift 2 ;;
-    --nodes)        MK_NODES="$2";      shift 2 ;;
-    --pubkey)       PUBKEY="$2";        shift 2 ;;
-    --privkey)      PRIVKEY="$2";       shift 2 ;;
-    --image-tag)    IMAGE_TAG="$2";     shift 2 ;;
-    --wait-timeout) WAIT_TIMEOUT="$2";  shift 2 ;;
-    --no-start)     DO_START=0;         shift ;;
-    --no-build)     DO_BUILD=0;         shift ;;
-    --no-ssh-prep)  DO_SSH_PREP=0;      shift ;;
-    --no-wait)      DO_WAIT=0;          shift ;;
-    --no-ssh-test)  DO_SSH_TEST=0;      shift ;;
-    -h|--help)
-      sed -n '/^# Usage:/,/^[^#]/{/^[^#]/q; s/^# \{0,1\}//; p}' "$0"
-      exit 0 ;;
-    *) echo "Unknown arg: $1" >&2; exit 2 ;;
+    --profile)      MK_PRF="$2";       PARSE_ARG_CONSUMED=2; return 0 ;;
+    --nodes)        MK_NODES="$2";     PARSE_ARG_CONSUMED=2; return 0 ;;
+    --pubkey)       PUBKEY="$2";       PARSE_ARG_CONSUMED=2; return 0 ;;
+    --privkey)      PRIVKEY="$2";      PARSE_ARG_CONSUMED=2; return 0 ;;
+    --image-tag)    IMAGE_TAG="$2";    PARSE_ARG_CONSUMED=2; return 0 ;;
+    --wait-timeout) WAIT_TIMEOUT="$2"; PARSE_ARG_CONSUMED=2; return 0 ;;
+    --no-start)     DO_START=0;         PARSE_ARG_CONSUMED=1; return 0 ;;
+    --no-build)     DO_BUILD=0;         PARSE_ARG_CONSUMED=1; return 0 ;;
+    --force-build)  FORCE_BUILD=1;      PARSE_ARG_CONSUMED=1; return 0 ;;
+    --no-ssh-prep)  DO_SSH_PREP=0;      PARSE_ARG_CONSUMED=1; return 0 ;;
+    --no-wait)      DO_WAIT=0;          PARSE_ARG_CONSUMED=1; return 0 ;;
+    --no-ssh-test)  DO_SSH_TEST=0;      PARSE_ARG_CONSUMED=1; return 0 ;;
+    *) return 1 ;;
   esac
-done
+}
+
+parse_script_args help_bootstrap_cluster parse_bootstrap_cluster_arg "$@" || exit $?
+init_kc_cmd
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+build_fingerprint() {
+  {
+    printf 'image_tag=%s\n' "$IMAGE_TAG"
+    printf 'pubkey_sha=%s\n' "$(sha256sum "$PUBKEY" | awk '{print $1}')"
+    find "$REPO_ROOT/images/wls-dev" -type f -print0 \
+      | sort -z \
+      | xargs -0 sha256sum
+  } | sha256sum | awk '{print $1}'
+}
 
 step() {
   echo ""
@@ -77,7 +104,7 @@ step() {
 
 apply() {
   echo "  apply $1"
-  $KC_CMD apply -f "$REPO_ROOT/$1"
+  kc apply -f "$REPO_ROOT/$1"
 }
 
 # ── Phase 1: minikube start ────────────────────────────────────────────────────
@@ -98,8 +125,28 @@ if [ "$DO_BUILD" -eq 1 ]; then
   if [ ! -f "$PUBKEY" ]; then
     echo "ERROR: pubkey not found: $PUBKEY" >&2; exit 2
   fi
-  docker build -t "$IMAGE_TAG" "$REPO_ROOT/images/wls-dev" \
-    --build-arg SSH_PUBKEY="$(sed -n '1p' "$PUBKEY")"
+
+  local_stamp_dir="$REPO_ROOT/prepare_docker/out.mk"
+  local_stamp_file="$local_stamp_dir/wls-dev.build.stamp"
+  mkdir -p "$local_stamp_dir"
+
+  fp_current="$(build_fingerprint)"
+  fp_cached=""
+  if [ -f "$local_stamp_file" ]; then
+    fp_cached="$(sed -n '1p' "$local_stamp_file" 2>/dev/null || true)"
+  fi
+
+  if [ "$FORCE_BUILD" -eq 0 ] \
+    && [ -n "$fp_cached" ] \
+    && [ "$fp_cached" = "$fp_current" ] \
+    && docker image inspect "$IMAGE_TAG" >/dev/null 2>&1; then
+    echo "  Build inputs unchanged – skipping docker build."
+  else
+    docker build -t "$IMAGE_TAG" "$REPO_ROOT/images/wls-dev" \
+      --build-arg SSH_PUBKEY="$(sed -n '1p' "$PUBKEY")"
+    printf '%s\n' "$fp_current" > "$local_stamp_file"
+  fi
+
   minikube -p "$MK_PRF" image load "$IMAGE_TAG"
   echo "  Image $IMAGE_TAG loaded into $MK_PRF."
 else
@@ -111,7 +158,9 @@ step "Phase 3/7 – Regenerate k8s/weblogic-authorized-keys.yaml"
 if [ ! -f "$PUBKEY" ]; then
   echo "ERROR: pubkey not found: $PUBKEY" >&2; exit 2
 fi
-$KC_CMD create configmap weblogic-authorized-keys \
+# Ensure namespace exists before creating namespace-scoped configmap YAML.
+kc apply -f "$REPO_ROOT/k8s/namespace.yaml" >/dev/null
+  kc create configmap weblogic-authorized-keys \
   --from-file=id_ed25519_docker.pub="$PUBKEY" \
   -n "$NAMESPACE" --dry-run=client -o yaml \
   > "$REPO_ROOT/k8s/weblogic-authorized-keys.yaml"
@@ -126,11 +175,11 @@ apply k8s/storageclass-manual.yaml
 apply k8s/pv.yaml
 
 # Check PV status and warn if Released (stale from previous run)
-PV_PHASE=$($KC_CMD get pv pv-weblogic-home -o jsonpath='{.status.phase}' 2>/dev/null || echo "Missing")
+PV_PHASE=$(kc get pv pv-weblogic-home -o jsonpath='{.status.phase}' 2>/dev/null || echo "Missing")
 if [ "$PV_PHASE" = "Released" ]; then
   echo "  WARNING: PV is in 'Released' state (leftover from previous PVC)."
   echo "  Patching claimRef to make it Available again..."
-  $KC_CMD patch pv pv-weblogic-home \
+  kc patch pv pv-weblogic-home \
     --type=json -p '[{"op":"remove","path":"/spec/claimRef"}]' 2>/dev/null || true
 fi
 
@@ -155,7 +204,7 @@ if [ "$DO_SSH_PREP" -eq 1 ]; then
   step "Phase 5/7 – SSH key prep on minikube nodes"
   cd "$REPO_ROOT"
   MK_PRF="$MK_PRF" CONTAINER_PREFIX="$MK_PRF" PUBKEY_PATH="$PUBKEY" \
-    bash prepare_docker/deploy-ssh-keys.sh
+    bash prepare_docker/pd/deploy-ssh-keys.sh
 else
   echo "[skip] Phase 5: SSH node prep"
 fi
@@ -165,7 +214,7 @@ if [ "$DO_WAIT" -eq 1 ]; then
   step "Phase 6/7 – Waiting for pods (timeout=$WAIT_TIMEOUT)"
   for label in app=wls-admin app=wls-managed-1 app=wls-managed-2 app=wls-managed-3 app=test-db; do
     printf "  waiting: %-25s ... " "-l $label"
-    if $KC_CMD wait pod -l "$label" -n "$NAMESPACE" \
+    if kc wait pod -l "$label" -n "$NAMESPACE" \
          --for=condition=ready --timeout="$WAIT_TIMEOUT" 2>/dev/null; then
       echo "Ready"
     else
@@ -173,7 +222,7 @@ if [ "$DO_WAIT" -eq 1 ]; then
     fi
   done
   echo ""
-  $KC_CMD get pods -n "$NAMESPACE" -o wide
+  kc get pods -n "$NAMESPACE" -o wide
 else
   echo "[skip] Phase 6: pod wait"
 fi
@@ -182,7 +231,7 @@ fi
 if [ "$DO_SSH_TEST" -eq 1 ]; then
   step "Phase 7/7 – SSH connectivity test via NodePorts"
   NODE_IP=""
-  NODE_IP=$($KC_CMD get nodes \
+  NODE_IP=$(kc get nodes \
     -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}' \
     2>/dev/null || true)
   if [ -z "$NODE_IP" ]; then
@@ -222,7 +271,7 @@ echo "  Bootstrap complete."
 echo "  Pods:     kc get pods -n $NAMESPACE -o wide"
 echo "  SSH:      ssh -i $PRIVKEY -p 30222 docker@<NODE_IP>"
 echo "  Ansible:  ansible-playbook -i inventory.yaml ansible/bootstrap_nodes.yml"
-echo "  Teardown: ./prepare_docker/teardown_namespace.sh --all --purge-data -y"
+echo "  Teardown: ./prepare_docker/pd/teardown_namespace.sh --all --purge-data -y"
 echo "═══════════════════════════════════════════════════════════════════"
 
 

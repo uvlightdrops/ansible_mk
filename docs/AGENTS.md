@@ -5,11 +5,11 @@
 This repo provisions a **WebLogic-on-Kubernetes dev environment** running inside a local **Minikube** cluster (profile `wlcluster`, 3–4 nodes).  
 Three layers work together:
 
-1. **Minikube nodes** (Docker containers) – prepared via `prepare_docker/deploy-ssh-keys.sh`
+1. **Minikube nodes** (Docker containers) – prepared via `prepare_docker/pd.sh -a assemble --level full`
 2. **Kubernetes workloads** (`k8s/`) – one WebLogic Admin Server pod + two Managed Server pods + optional test DB, all in namespace `weblogic`
 3. **Ansible** (`ansible/`, `k8s_weblogic/`) – bootstraps Python on nodes, then deploys the WebLogic Operator and Domain CR
 
-The Python package `prepare_docker_py/` is the **primary CLI** that replaced the bash helpers in `prepare_docker/`.
+The shell orchestrator `prepare_docker/pd.sh` is the primary ops entrypoint. The Python package `prepare_docker_py/` remains available for supplemental workflows.
 
 ---
 
@@ -35,7 +35,9 @@ PYTHONPATH=. python3 prepare_docker_py/cli.py <subcommand>
 
 ### Initial node preparation (once per cluster)
 ```bash
-bash prepare_docker/deploy-ssh-keys.sh          # creates /home/docker/.ssh on Minikube containers, copies pubkey, preps PV paths
+./prepare_docker/pd.sh -a assemble --level full  # node SSH prep + configmap + rollout + pubkeys + verify
+# or only deploy SSH keys on Minikube nodes:
+bash prepare_docker/pd/deploy-ssh-keys.sh
 ```
 
 ### Generate Ansible inventory from live cluster
@@ -53,6 +55,19 @@ ansible-playbook -i inventory.yaml ansible/bootstrap_nodes.yml
 ```bash
 ansible-galaxy collection install kubernetes.core
 ansible-playbook k8s_weblogic/deploy_weblogic.yml   # uses group_vars/all.yml
+```
+
+### Day-2 pod operations (Shell — `pd.sh`)
+```bash
+# Einzelnen Pod prüfen
+./prepare_docker/pd.sh --pod wls-managed-1-0 diagnose
+./prepare_docker/pd.sh --pod wls-managed-1-0 check ssh
+./prepare_docker/pd.sh --pod wls-managed-1-0 check nodeport
+
+# Alle Pods
+./prepare_docker/pd.sh -a diagnose
+./prepare_docker/pd.sh -a assemble --level pod   # nur pubkeys verteilen
+./prepare_docker/pd.sh -a down --level scale-down -y
 ```
 
 ### Day-2 pod operations (Python CLI)
@@ -103,10 +118,11 @@ python3 prepare_docker_py/cli.py log -m "describe what you changed"
 | `group_vars/all.yml` | Single source of truth for namespace, domain, image, PV config |
 | `k8s/` | All K8s manifests (split, current) |
 | `prepare_docker_py/cli.py` | Main Python CLI entry point |
+| `tools/pd-secondary` | Secondary wrapper for Python CLI |
 | `prepare_docker_py/kc.py` | Thin subprocess wrapper for `kubectl`/`kc` |
 | `ansible/bootstrap_nodes.yml` | Ensures Python is present, runs ping |
 | `k8s_weblogic/deploy_weblogic.yml` | Deploys Operator + Domain CR via `kubernetes.core` |
-| `prepare_docker/deploy-ssh-keys.sh` | One-time Minikube node SSH + PV preparation |
+| `prepare_docker/pd/deploy-ssh-keys.sh` | One-time Minikube node SSH + PV preparation (aufgerufen via `pd.sh -a assemble --level full`) |
 | `docs/HISTORY.md` | Timestamped change log (append via CLI) |
 | `docs/WEBLOGIC_DEPLOYMENT.md` | Full deployment walkthrough + troubleshooting |
 

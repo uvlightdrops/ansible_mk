@@ -12,25 +12,32 @@ set -euo pipefail
 # Usage:
 #   ./prepare_docker/recreate_storage.sh [-n namespace] [-k kc_cmd] [--purge-data] [-y]
 
-MK_PRF="${MK_PRF:-wlcluster}"
-PV_PATH="${PV_PATH:-/mnt/weblogic/pv-home}"
 PURGE_DATA=0
-AUTO_YES=0
 
 source "$(dirname "$0")/common.sh"
-consumed=$(parse_common_args "$@") || exit 1
-shift "$consumed"
 
-while [ "$#" -gt 0 ]; do
+recreate_storage_usage_extra() {
+  cat <<EOF
+  --purge-data  additionally wipe hostPath data on all minikube node containers
+  -y / --yes    skip confirmation prompt
+EOF
+}
+
+help_recreate_storage() {
+  usage_render_script "$0 [-n namespace] [-k kc_cmd] [--purge-data] [-y]" recreate_storage_usage_extra
+  exit 0
+}
+
+parse_recreate_storage_arg() {
   case "$1" in
-    --purge-data) PURGE_DATA=1; shift ;;
-    -y|--yes)     AUTO_YES=1;   shift ;;
-    -h|--help)
-      sed -n '/^# Usage:/,/^[^#]/{/^[^#]/q; s/^# \{0,1\}//; p}' "$0"
-      exit 0 ;;
-    *) echo "Unknown arg: $1" >&2; exit 2 ;;
+    --purge-data) PURGE_DATA=1; PARSE_ARG_CONSUMED=1; : "${PARSE_ARG_CONSUMED}"; return 0 ;;
+    -y|--yes)     AUTO_YES=1;   PARSE_ARG_CONSUMED=1; : "${PARSE_ARG_CONSUMED}"; return 0 ;;
+    *) return 1 ;;
   esac
-done
+}
+
+parse_script_args help_recreate_storage parse_recreate_storage_arg "$@" || exit $?
+init_kc_cmd
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
@@ -66,38 +73,38 @@ fi
 # ── 2. Alte Ressourcen entfernen (falls noch vorhanden) ───────────────────────
 echo ""
 echo "─── Cleanup: PVC / PV / StorageClass (ignore-not-found) ───"
-$KC_CMD delete pvc -n "$NAMESPACE" --all --ignore-not-found=true
-$KC_CMD delete pv pv-weblogic-home --ignore-not-found=true
-$KC_CMD delete storageclass manual --ignore-not-found=true
+kc delete pvc -n "$NAMESPACE" --all --ignore-not-found=true
+kc delete pv pv-weblogic-home --ignore-not-found=true
+kc delete storageclass manual --ignore-not-found=true
 
 # ── 3. Namespace sicherstellen ────────────────────────────────────────────────
 echo ""
 echo "─── Namespace $NAMESPACE sicherstellen ───"
-$KC_CMD apply -f "$REPO_ROOT/k8s/namespace.yaml"
+kc apply -f "$REPO_ROOT/k8s/namespace.yaml"
 
 # ── 4. StorageClass + PV + PVC neu anlegen ────────────────────────────────────
 echo ""
 echo "─── StorageClass / PV / PVC anlegen ───"
-$KC_CMD apply -f "$REPO_ROOT/k8s/storageclass-manual.yaml"
-$KC_CMD apply -f "$REPO_ROOT/k8s/pv.yaml"
+kc apply -f "$REPO_ROOT/k8s/storageclass-manual.yaml"
+kc apply -f "$REPO_ROOT/k8s/pv.yaml"
 
 # PV-Status prüfen – sollte sofort Available sein
-PV_PHASE=$($KC_CMD get pv pv-weblogic-home -o jsonpath='{.status.phase}' 2>/dev/null || echo "Missing")
+PV_PHASE=$(kc get pv pv-weblogic-home -o jsonpath='{.status.phase}' 2>/dev/null || echo "Missing")
 echo "  PV-Phase nach Apply: $PV_PHASE"
 if [ "$PV_PHASE" = "Released" ]; then
   echo "  Patch: entferne claimRef (Released -> Available)..."
-  $KC_CMD patch pv pv-weblogic-home \
+  kc patch pv pv-weblogic-home \
     --type=json -p '[{"op":"remove","path":"/spec/claimRef"}]' 2>/dev/null || true
 fi
 
-$KC_CMD apply -f "$REPO_ROOT/k8s/pvc-weblogic-home.yaml"
+kc apply -f "$REPO_ROOT/k8s/pvc-weblogic-home.yaml"
 
 # ── 5. Status-Ausgabe ─────────────────────────────────────────────────────────
 echo ""
 echo "─── Status ───"
-$KC_CMD get storageclass 2>/dev/null || true
-$KC_CMD get pv 2>/dev/null || true
-$KC_CMD get pvc -n "$NAMESPACE" 2>/dev/null || true
+kc get storageclass 2>/dev/null || true
+kc get pv 2>/dev/null || true
+kc get pvc -n "$NAMESPACE" 2>/dev/null || true
 
 echo ""
 echo "═══════════════════════════════════════════════════════════════════"

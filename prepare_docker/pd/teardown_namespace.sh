@@ -18,30 +18,14 @@ set -euo pipefail
 
 LEVEL="resources"
 PURGE_DATA=0
-MK_PRF="${MK_PRF:-wlcluster}"
-PV_PATH="${PV_PATH:-/mnt/weblogic/pv-home}"
-AUTO_YES=0
 
-source "$(dirname "$0")/common.sh"
-consumed=$(parse_common_args "$@") || exit 1
-shift "$consumed"
-
-while [ "$#" -gt 0 ]; do
-  case "$1" in
-    --scale-down)  LEVEL="scale-down"; shift ;;
-    --soft)        LEVEL="soft";       shift ;;
-    --resources)   LEVEL="resources";  shift ;;
-    --namespace)   LEVEL="namespace";  shift ;;
-    --all)         LEVEL="all";        shift ;;
-    --purge-data)  PURGE_DATA=1;       shift ;;
-    -y|--yes)      AUTO_YES=1;         shift ;;
-    -h|--help)
-      cat <<EOF
-Usage: $0 [-n namespace] [-k kc_cmd] [--scale-down|--soft|--resources|--namespace|--all] [--purge-data] [-y]
-
-Levels (gentlest → most destructive):
+source "$(dirname "$0")/../common.sh"
+help_teardown_namespace() {
+  teardown_usage_extra() {
+    cat <<EOF
+Levels (gentlest -> most destructive):
   --scale-down  scale all workloads to 0 replicas (pods stop; everything else stays intact)
-                → bring back: kc scale deployment --all --replicas=1 -n $NAMESPACE
+                -> bring back: kc scale deployment --all --replicas=1 -n $NAMESPACE
                                kc scale statefulset --all --replicas=1 -n $NAMESPACE
   --soft        delete Deployments/StatefulSets (PVC/ConfigMaps/Services stay; re-apply manifests to restore)
   --resources   (default) delete all resources in namespace (deploy, svcs, cm, pvc)
@@ -52,10 +36,26 @@ Flags:
   --purge-data  wipe $PV_PATH on all minikube node containers (docker required)
   -y / --yes    skip confirmation prompt
 EOF
-      exit 0 ;;
-    *) echo "Unknown arg: $1" >&2; exit 2 ;;
+  }
+  usage_render_script "$0 [--scale-down|--soft|--resources|--namespace|--all] [--purge-data] [-y]" teardown_usage_extra
+  exit 0
+}
+
+parse_teardown_namespace_arg() {
+  case "$1" in
+    --scale-down)  LEVEL="scale-down"; PARSE_ARG_CONSUMED=1; return 0 ;;
+    --soft)        LEVEL="soft";       PARSE_ARG_CONSUMED=1; return 0 ;;
+    --resources)   LEVEL="resources";  PARSE_ARG_CONSUMED=1; return 0 ;;
+    --namespace)   LEVEL="namespace";  PARSE_ARG_CONSUMED=1; return 0 ;;
+    --all)         LEVEL="all";        PARSE_ARG_CONSUMED=1; return 0 ;;
+    --purge-data)  PURGE_DATA=1;        PARSE_ARG_CONSUMED=1; return 0 ;;
+    -y|--yes)      AUTO_YES=1;          PARSE_ARG_CONSUMED=1; return 0 ;;
+    *) return 1 ;;
   esac
-done
+}
+
+parse_script_args help_teardown_namespace parse_teardown_namespace_arg "$@" || exit $?
+init_kc_cmd
 
 echo "=== Teardown plan: level='$LEVEL'  purge_data=$PURGE_DATA  namespace=$NAMESPACE ==="
 if [ "$AUTO_YES" -eq 0 ]; then
@@ -71,39 +71,39 @@ fi
 
 do_scale_down() {
   echo "-> Scaling all Deployments in $NAMESPACE to 0 replicas"
-  $KC_CMD scale deployment --all --replicas=0 -n "$NAMESPACE" || true
+  kc scale deployment --all --replicas=0 -n "$NAMESPACE" || true
   echo "-> Scaling all StatefulSets in $NAMESPACE to 0 replicas"
-  $KC_CMD scale statefulset --all --replicas=0 -n "$NAMESPACE" || true
+  kc scale statefulset --all --replicas=0 -n "$NAMESPACE" || true
   echo "-> Waiting for pods to terminate..."
-  $KC_CMD wait pod --all -n "$NAMESPACE" --for=delete --timeout=60s 2>/dev/null || true
+  kc wait pod --all -n "$NAMESPACE" --for=delete --timeout=60s 2>/dev/null || true
   echo "-> All pods stopped. Workloads/Services/ConfigMaps/PVCs intact."
-  echo "   To bring pods back: $KC_CMD scale deployment --all --replicas=1 -n $NAMESPACE"
-  echo "                      $KC_CMD scale statefulset --all --replicas=1 -n $NAMESPACE"
+  echo "   To bring pods back: kc scale deployment --all --replicas=1 -n $NAMESPACE"
+  echo "                      kc scale statefulset --all --replicas=1 -n $NAMESPACE"
 }
 
 do_soft() {
   echo "-> Deleting Deployments in $NAMESPACE"
-  $KC_CMD delete deployment --all -n "$NAMESPACE" --ignore-not-found=true
+  kc delete deployment --all -n "$NAMESPACE" --ignore-not-found=true
   echo "-> Deleting StatefulSets in $NAMESPACE"
-  $KC_CMD delete statefulset --all -n "$NAMESPACE" --ignore-not-found=true
+  kc delete statefulset --all -n "$NAMESPACE" --ignore-not-found=true
 }
 
 do_resources() {
   do_soft
   echo "-> Deleting Services in $NAMESPACE"
-  $KC_CMD delete service --all -n "$NAMESPACE" --ignore-not-found=true
+  kc delete service --all -n "$NAMESPACE" --ignore-not-found=true
   echo "-> Deleting ConfigMaps in $NAMESPACE (skipping kube-root-ca.crt)"
-  $KC_CMD get configmap -n "$NAMESPACE" -o name \
+  kc get configmap -n "$NAMESPACE" -o name \
     | grep -v 'kube-root-ca' \
-    | xargs -r $KC_CMD delete -n "$NAMESPACE" --ignore-not-found=true || true
+    | xargs -r kc delete -n "$NAMESPACE" --ignore-not-found=true || true
   echo "-> Deleting PVCs in $NAMESPACE"
-  $KC_CMD delete pvc --all -n "$NAMESPACE" --ignore-not-found=true
+  kc delete pvc --all -n "$NAMESPACE" --ignore-not-found=true
 }
 
 wait_namespace_gone() {
   local retries=30
   echo "-> Waiting for namespace $NAMESPACE to be fully removed..."
-  while $KC_CMD get namespace "$NAMESPACE" >/dev/null 2>&1; do
+  while kc get namespace "$NAMESPACE" >/dev/null 2>&1; do
     retries=$((retries-1))
     if [ "$retries" -eq 0 ]; then
       echo "Warning: namespace $NAMESPACE still present after wait – continuing anyway" >&2
@@ -116,7 +116,7 @@ wait_namespace_gone() {
 
 do_namespace() {
   echo "-> Deleting namespace $NAMESPACE"
-  $KC_CMD delete namespace "$NAMESPACE" --ignore-not-found=true
+  kc delete namespace "$NAMESPACE" --ignore-not-found=true
   wait_namespace_gone
 }
 
@@ -155,9 +155,9 @@ case "$LEVEL" in
   all)
     do_namespace
     echo "-> Deleting PV pv-weblogic-home"
-    $KC_CMD delete pv pv-weblogic-home --ignore-not-found=true
+    kc delete pv pv-weblogic-home --ignore-not-found=true
     echo "-> Deleting StorageClass manual"
-    $KC_CMD delete storageclass manual --ignore-not-found=true
+    kc delete storageclass manual --ignore-not-found=true
     ;;
 esac
 
@@ -168,10 +168,11 @@ fi
 echo ""
 echo "=== Teardown complete (level=$LEVEL) ==="
 if [ "$LEVEL" = "scale-down" ]; then
-  echo "    Bring back:  $KC_CMD scale deployment --all --replicas=1 -n $NAMESPACE"
-  echo "                 $KC_CMD scale statefulset --all --replicas=1 -n $NAMESPACE"
+  echo "    Bring back:  kc scale deployment --all --replicas=1 -n $NAMESPACE"
+  echo "                 kc scale statefulset --all --replicas=1 -n $NAMESPACE"
   echo "    Or full rebuild: ./prepare_docker/bootstrap_cluster.sh --no-start --no-build"
 else
   echo "    To rebuild from scratch: ./prepare_docker/bootstrap_cluster.sh"
 fi
+
 

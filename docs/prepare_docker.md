@@ -1,5 +1,59 @@
 # prepare_docker — Hilfs‑Skripte für Minikube / Dev Cluster
 
+## Neu strukturierter Einstieg: `prepare_docker/pd.sh`
+
+Um die historisch gewachsenen Einzel-Skripte konsistenter zu bedienen, gibt es jetzt einen zentralen Shell-Entry-Point:
+
+```bash
+./prepare_docker/pd.sh [global options] <command> [command options]
+```
+
+Logische Gliederung (Aspekte)
+- Targeting:
+  - default: einzelnes Ziel (`--pod <name>` oder `--label ...`)
+  - `-a` / `--all`: auf alle Pods loopen
+  - optional `--label app=...` fuer gefilterte Pod-Auswahl
+- Ausgabe/Logging:
+  - `-v` fuer mehr Details
+  - `--quiet` fuer reduzierte Konsolenausgabe
+  - `--log-file <path>` fuer persistentes Command/Output Logging
+  - `--dry-run` fuer planbare, nicht-ausgefuehrte Runs
+
+Zentrale Konfiguration (Defaults)
+- Gemeinsame Standardwerte liegen in `prepare_docker/config.defaults.sh` (z. B. `NAMESPACE_DEFAULT`, `MK_PRF_DEFAULT`, `PV_PATH_DEFAULT`, `AUTO_YES_DEFAULT`).
+- Optional kannst du lokale Overrides in `prepare_docker/config.local.sh` hinterlegen.
+- Alle Scripts laden diese Defaults ueber `prepare_docker/common.sh`; CLI-Argumente haben weiterhin Vorrang.
+
+Logische Bereiche (Commands)
+- `check`: einzelner Check, z. B. `check basic|home|ssh|nodeport`
+- `diagnose`: fuehrt alle Checks hintereinander aus (optional `--full`)
+- `assemble`: System schrittweise aufbauen
+- `down`: System schrittweise herunterfahren
+
+Analoge `--level` Logik
+- `assemble --level pod|rollout|full`
+- `down --level scale-down|soft|resources|namespace|all`
+
+Convenience-Wrapper
+- `up`: `assemble` + `diagnose`
+- `doctor`: `diagnose --full --crashloops`
+
+Beispiele
+
+```bash
+./prepare_docker/pd.sh --pod wls-managed-1-0 check ssh
+./prepare_docker/pd.sh --pod wls-admin-0 check home
+./prepare_docker/pd.sh -a diagnose
+./prepare_docker/pd.sh -a diagnose --full --crashloops
+./prepare_docker/pd.sh -a assemble --level full
+./prepare_docker/pd.sh --log-file prepare_docker/out.diagnostics/pd.log assemble --level pod
+./prepare_docker/pd.sh -a doctor
+./prepare_docker/pd.sh down --level scale-down -y
+```
+
+Hinweis zur Konsolidierung
+- `pd.sh` ist der zentrale Shell-Entry-Point; fruehere `loop_*` Varianten sind entfernt.
+
 Dieses Dokument listet und erklärt die kleinen Shell‑Skripte im Verzeichnis `prepare_docker/`.
 Die Skripte dienen zur lokalen Vorbereitung von Minikube‑Node‑Containern, Erzeugung der ConfigMap
 für das Init‑Script, sowie zur einfachen Verteilung des Public SSH‑Keys in Test‑Pods.
@@ -9,7 +63,7 @@ Pfad: `prepare_docker/`
 Wichtige Skripte
 - `collect_minikube_diagnostics.sh` — Diagnose‑Skript, sammelt `minikube`/`kubectl`/`docker` Informationen
   und schreibt sie in `out.diagnostics/` (nützlich zur Fehlersuche bei NotReady‑Nodes und Pods).
-- `deploy-ssh-keys.sh` — bereitet die Minikube Node‑Container vor:
+- `pd/deploy-ssh-keys.sh` — bereitet die Minikube Node‑Container vor:
   - legt `/home/docker/.ssh` an
   - kopiert `setup_user.sh` und das angegebene Public Key in den Node‑Container
   - führt `setup_user.sh` im Node aus (idempotent erzeugt den Benutzer `docker`, sudoers, `.ssh/authorized_keys`)
@@ -31,12 +85,10 @@ Wichtige Skripte
 
 - `mk_start.sh` — lokale Start‑Hilfen für Minikube (projektspezifische Alias/Startbefehle).
 
-Neu hinzugefügte helper‑Skripte (repo)
-- `loop_install_pubkey.sh` — iteriert über alle Pods im Namespace und fügt den Public Key idempotent in
-  `/home/docker/.ssh/authorized_keys` ein (nur wenn `/home/docker` existiert). Usage: `./loop_install_pubkey.sh -n weblogic -p ~/.ssh/id_ed25519_docker.pub`.
-- `loop_check_home.sh` — listet `/home` und `/home/docker/.ssh` für alle Pods und zeigt Rechte an.
-- `restart_wls_rollouts.sh` — startet Rollouts für `wls-admin`, `wls-managed-1`, `wls-managed-2`, `wls-dev` und wartet auf Status.
-- `gen_configmap_from_script.sh` — generiert `k8s/gen-ssh-keys-config.yaml` aus `prepare_docker/gen-ssh-keys.sh` und wendet die ConfigMap an.
+Skripte mit eigenem Aufruf (intern auch in `pd.sh` verwendet)
+- `pd/restart_wls_rollouts.sh` — startet Rollouts für `wls-admin`, `wls-managed-1`, `wls-managed-2`, `wls-dev` und wartet auf Status.
+- `pd/gen_configmap_from_script.sh` — generiert `k8s/gen-ssh-keys-config.yaml` aus `prepare_docker/gen-ssh-keys.sh` und wendet die ConfigMap an.
+
 
  - `reap_terminating.sh` — versucht Pods im `Terminating` Zustand aufzuräumen: normales Löschen, kurz warten,
    bei Bedarf Finalizer entfernen und force-delete. Usage: `./reap_terminating.sh -n weblogic`.
@@ -50,18 +102,18 @@ Tipps
 - Falls `ssh-keygen` im Image fehlt, entweder das Image anpassen oder für InitContainer ein anderes Image
   (z. B. `ubuntu:22.04`) zum Generieren der Hostkeys verwenden.
 
-Beispiel‑Workflow (schnell)
-1. Erzeuge/aktualisiere die ConfigMap:
+Beispiel‑Workflow (schnell) — via `pd.sh`
+1. Erzeuge/aktualisiere die ConfigMap + Rollouts + Pubkeys:
    ```bash
-   ./prepare_docker/gen_configmap_from_script.sh -n weblogic
+   ./prepare_docker/pd.sh -a assemble --level rollout
    ```
-2. Rollout restart:
+2. Pubkeys nur in Pods verteilen (ohne Rollout):
    ```bash
-   ./prepare_docker/restart_wls_rollouts.sh -n weblogic
+   ./prepare_docker/pd.sh -a assemble --level pod
    ```
-3. Key in Pods verteilen (falls InitContainer nur Home anlegt):
+3. Alles prüfen (Home + SSH + NodePort):
    ```bash
-   ./prepare_docker/loop_install_pubkey.sh -n weblogic -p ~/.ssh/id_ed25519_docker.pub
+   ./prepare_docker/pd.sh -a diagnose
    ```
 
       ## Ablauf: `build_and_deploy_wls_dev.sh` und `gen-ssh-keys.sh`
@@ -141,14 +193,21 @@ und sehen keine aliases. Ein kleines ausführbares `kc` ist reproduzierbar, CI�
 Python CLI
 ----------
 
-Es gibt eine kleine Python‑Toolchain unter `prepare_docker_py/` mit einem CLI‑Entrypoint. Ein wrapper `tools/pd` startet
-die CLI so, dass du z.B. `pd loop-install-pubkey -n weblogic` verwenden kannst.
+Es gibt eine kleine Python‑Toolchain unter `prepare_docker_py/` mit einem CLI‑Entrypoint.
+
+- `tools/pd` ist der **primaere Shell-Entry-Point** (delegiert auf `prepare_docker/pd.sh`).
+- `tools/pd-secondary` startet die Python-CLI und ist bewusst als **secondary** benannt.
 
 Beispiel:
 ```bash
-chmod +x tools/pd
-tools/pd get-pod -n weblogic
-tools/pd loop-install-pubkey -n weblogic -k ~/.ssh/id_ed25519_docker
+chmod +x tools/pd tools/pd-secondary
+
+# primary (shell)
+tools/pd -a diagnose
+
+# secondary (python)
+tools/pd-secondary get-pod -n weblogic
+tools/pd-secondary loop-install-pubkey -n weblogic -k ~/.ssh/id_ed25519_docker
 ```
 
 
@@ -175,13 +234,13 @@ Wie sie zusammenarbeiten
 Kurzbefehle (kopierbar):
 ```bash
 # Erzeuge/aktualisiere die ConfigMap aus dem lokalen Script
-./prepare_docker/gen_configmap_from_script.sh -n weblogic
+./prepare_docker/pd/gen_configmap_from_script.sh -n weblogic
 
 # Wende die ConfigMap an
 kc apply -f k8s/gen-ssh-keys-config.yaml
 
 # Starte die Deployments neu, damit InitContainers laufen
-./prepare_docker/restart_wls_rollouts.sh -n weblogic
+./prepare_docker/pd/restart_wls_rollouts.sh -n weblogic
 
 # Prüfe InitContainer Logs
 POD=$(kc get pods -n weblogic -l app=wls-admin -o jsonpath='{.items[0].metadata.name}')
@@ -253,7 +312,7 @@ Warnung: force-delete kann zu inkonsistentem Zustand bei Stateful Volumes führe
 
 ## Neues: strukturierte Diagnostics Sammlung
 
-Ein neues Script `prepare_docker/collect_diagnostics.sh` sammelt cluster- und namespace‑weit
+Ein neues Script `prepare_docker/pd/collect_diagnostics.sh` sammelt cluster- und namespace‑weit
 Diagnosedaten und schreibt sie in ein timestamped Verzeichnis unter `out.diagnostics/`.
 
 Kurz: es erzeugt `out.diagnostics/<YYYYMMDDTHHMMSSZ>/` mit Unterverzeichnissen pro Namespace
@@ -262,13 +321,13 @@ Kurz: es erzeugt `out.diagnostics/<YYYYMMDDTHHMMSSZ>/` mit Unterverzeichnissen p
 Usage (einfach):
 ```bash
 # Namespace-spezifisch
-./prepare_docker/collect_diagnostics.sh -n weblogic
+./prepare_docker/pd/collect_diagnostics.sh -n weblogic
 
 # Alle Namespaces (länger)
-./prepare_docker/collect_diagnostics.sh -a
+./prepare_docker/pd/collect_diagnostics.sh -a
 
 # Optional: nach Sammeln Reap ausführen (versucht Terminating Pods aufzuräumen)
-./prepare_docker/collect_diagnostics.sh -n weblogic --reap
+./prepare_docker/pd/collect_diagnostics.sh -n weblogic --reap
 ```
 
 Ergebnis: Ein Archivierbares `out.diagnostics/<ts>/` mit allen relevanten Outputs, das du
@@ -277,7 +336,7 @@ z.B. an Kollegen oder in ein Issue anhängen kannst.
 CrashLoop‑Diagnose
 ------------------
 
-Ein neues spezialisiertes Script `prepare_docker/diagnose_crashloops.sh` sammelt gezielt
+Ein neues spezialisiertes Script `prepare_docker/pd/diagnose_crashloops.sh` sammelt gezielt
 Informationen für Pods im `CrashLoopBackOff` Zustand. Es legt pro Pod ein Verzeichnis
 an mit `describe.txt`, `pod.yaml`, `node.describe.txt`, `log.<container>.txt`,
 `log.<container>.previous.txt` und `events.txt`.
@@ -285,13 +344,13 @@ an mit `describe.txt`, `pod.yaml`, `node.describe.txt`, `log.<container>.txt`,
 Usage (kurz):
 ```bash
 # Namespace-spezifisch
-./prepare_docker/diagnose_crashloops.sh -n weblogic
+./prepare_docker/pd/diagnose_crashloops.sh -n weblogic
 
 # Alle Namespaces
-./prepare_docker/diagnose_crashloops.sh -a
+./prepare_docker/pd/diagnose_crashloops.sh -a
 
 # Anpassen: tail lines und output dir
-./prepare_docker/diagnose_crashloops.sh -n weblogic -t 200 -o out.diagnostics/custom
+./prepare_docker/pd/diagnose_crashloops.sh -n weblogic -t 200 -o out.diagnostics/custom
 ```
 
 Die Ausgabe landet unter `out.diagnostics/<timestamp>/crashloops/` (oder deinem `-o` Ziel).

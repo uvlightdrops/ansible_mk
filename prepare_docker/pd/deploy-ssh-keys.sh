@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
 CONTAINER_PREFIX="${CONTAINER_PREFIX:-${MK_PRF:-wlcluster}}"
 #SSH_USER="flow"
 SSH_USER="docker"
@@ -44,7 +47,7 @@ for c in $containers; do
     echo "docker exec --privileged -u root $c chmod 700 $PV_PATH"
     docker exec --privileged -u root "$c" chmod 700 "$PV_PATH" || true
   fi
-  docker cp prepare_docker/setup_user.sh  "$c:/$SSH_HOME/setup_user.sh"
+  docker cp "$REPO_ROOT/prepare_docker/setup_user.sh" "$c:/$SSH_HOME/setup_user.sh"
 
   echo "docker cp $PUBKEY_PATH $c:/$SSH_HOME/.ssh/$KEYFILE"
   docker cp "$PUBKEY_PATH" "$c:/$SSH_HOME/.ssh/$KEYFILE"
@@ -54,4 +57,5 @@ for c in $containers; do
 	echo "Fertig. Test: ssh -i ${HOME}/.ssh/$KEYFILE ${SSH_USER}@$ip"
   echo
 done
+
 

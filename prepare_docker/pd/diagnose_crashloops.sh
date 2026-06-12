@@ -14,20 +14,31 @@ ALL_NS=0
 TAIL=500
 OUT_BASE=
 
-source "$(dirname "$0")/common.sh"
-source "$(dirname "$0")/diag_common.sh"
-consumed=$(parse_common_args "$@") || exit 1
-shift "$consumed"
+source "$(dirname "$0")/../common.sh"
+source "$(dirname "$0")/../diag_common.sh"
 
-while [ "$#" -gt 0 ]; do
+help_diagnose_crashloops() {
+  diagnose_crashloops_usage_extra() {
+    cat <<EOF
+  -a collect for all namespaces
+  -t tail_lines (default: 500)
+  -o outdir (default: out.diagnostics/<ts>/crashloops)
+EOF
+  }
+  usage_render_script "$0 [-a] [-t tail_lines] [-o outdir]" diagnose_crashloops_usage_extra
+  exit 0
+}
+
+parse_diagnose_crashloops_arg() {
   case "$1" in
-    -a) ALL_NS=1; shift 1; ;;
-    -t) TAIL="$2"; shift 2; ;;
-    -o) OUT_BASE="$2"; shift 2; ;;
-    -h|--help) echo "Usage: $0 [-n namespace] [-k kc_cmd] [-a] [-t tail_lines] [-o outdir]"; exit 0; ;;
-    *) echo "Unknown arg: $1" >&2; exit 2; ;;
+    -a) ALL_NS=1; PARSE_ARG_CONSUMED=1; return 0 ;;
+    -t) TAIL="$2"; PARSE_ARG_CONSUMED=2; return 0 ;;
+    -o) OUT_BASE="$2"; PARSE_ARG_CONSUMED=2; return 0 ;;
+    *) return 1 ;;
   esac
-done
+}
+
+parse_script_args help_diagnose_crashloops parse_diagnose_crashloops_arg "$@" || exit $?
 
 OUT_BASE=${OUT_BASE:-$(diag_init_outdir)/crashloops}
 mkdir -p "$OUT_BASE"
@@ -38,10 +49,10 @@ pods_list()
 {
   if [ "$ALL_NS" -eq 1 ]; then
     # global: namespace|pod|reasons
-    $KC_CMD get pods --all-namespaces -o jsonpath='{range .items[*]}{.metadata.namespace}{"|"}{.metadata.name}{"|"}{range .status.containerStatuses[*]}{.state.waiting.reason}{";"}{end}{"\n"}{end}' 2>/dev/null |
+    kc get pods --all-namespaces -o jsonpath='{range .items[*]}{.metadata.namespace}{"|"}{.metadata.name}{"|"}{range .status.containerStatuses[*]}{.state.waiting.reason}{";"}{end}{"\n"}{end}' 2>/dev/null |
       awk -F"|" '/CrashLoopBackOff/ {print $1" " $2}'
   else
-    $KC_CMD get pods -n "$NAMESPACE" -o jsonpath='{range .items[*]}{.metadata.namespace}{"|"}{.metadata.name}{"|"}{range .status.containerStatuses[*]}{.state.waiting.reason}{";"}{end}{"\n"}{end}' 2>/dev/null |
+    kc get pods -n "$NAMESPACE" -o jsonpath='{range .items[*]}{.metadata.namespace}{"|"}{.metadata.name}{"|"}{range .status.containerStatuses[*]}{.state.waiting.reason}{";"}{end}{"\n"}{end}' 2>/dev/null |
       awk -F"|" '/CrashLoopBackOff/ {print $1" " $2}'
   fi
 }
@@ -58,7 +69,7 @@ echo "$pods" | while read -r ns pod; do
   mkdir -p "$pd"
   diag_collect_pod "$ns" "$pod" "$pd" "$TAIL"
   # best-effort node kubelet journal
-  node=$($KC_CMD get pod "$pod" -n "$ns" -o jsonpath='{.spec.nodeName}' 2>/dev/null || true)
+  node=$(kc get pod "$pod" -n "$ns" -o jsonpath='{.spec.nodeName}' 2>/dev/null || true)
   if [ -n "$node" ]; then
     diag_collect_node_journal "$node" "$pd"
   fi
@@ -68,3 +79,4 @@ done
 echo "Done. Files written under $OUT_BASE"
 
 exit 0
+

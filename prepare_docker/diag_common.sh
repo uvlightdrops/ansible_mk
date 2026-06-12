@@ -4,7 +4,7 @@ set -euo pipefail
 # Helper functions for diagnostics scripts
 # Source this file from diagnostics scripts to reuse common logic.
 
-KC_CMD="${KC_CMD:-kc}"
+init_kc_cmd
 
 # diag_init_outdir [out_dir] - initialize timestamped out dir or use given
 # sets DIAG_OUT_DIR global
@@ -30,29 +30,29 @@ diag_collect_pod() {
   local tail=${4:-500}
   mkdir -p "$dest"
   echo "Collecting pod $ns/$pod -> $dest"
-  $KC_CMD describe pod "$pod" -n "$ns" > "$dest/describe.txt" 2>&1 || true
-  $KC_CMD get pod "$pod" -n "$ns" -o yaml > "$dest/pod.yaml" 2>&1 || true
+  kc describe pod "$pod" -n "$ns" > "$dest/describe.txt" 2>&1 || true
+  kc get pod "$pod" -n "$ns" -o yaml > "$dest/pod.yaml" 2>&1 || true
 
   # node
   local node
-  node=$($KC_CMD get pod "$pod" -n "$ns" -o jsonpath='{.spec.nodeName}' 2>/dev/null || true)
+  node=$(kc get pod "$pod" -n "$ns" -o jsonpath='{.spec.nodeName}' 2>/dev/null || true)
   echo "node: $node" > "$dest/node.txt"
 
   # containers
   local containers
   local init_containers
-  containers=$($KC_CMD get pod "$pod" -n "$ns" -o jsonpath='{.spec.containers[*].name}' 2>/dev/null || true)
-  init_containers=$($KC_CMD get pod "$pod" -n "$ns" -o jsonpath='{.spec.initContainers[*].name}' 2>/dev/null || true)
+  containers=$(kc get pod "$pod" -n "$ns" -o jsonpath='{.spec.containers[*].name}' 2>/dev/null || true)
+  init_containers=$(kc get pod "$pod" -n "$ns" -o jsonpath='{.spec.initContainers[*].name}' 2>/dev/null || true)
 
   for c in $containers; do
-    $KC_CMD logs -n "$ns" "$pod" -c "$c" --tail=$tail > "$dest/log.${c}.txt" 2>&1 || true
-    $KC_CMD logs -n "$ns" "$pod" -c "$c" --previous --tail=$tail > "$dest/log.${c}.previous.txt" 2>&1 || true
+    kc logs -n "$ns" "$pod" -c "$c" --tail=$tail > "$dest/log.${c}.txt" 2>&1 || true
+    kc logs -n "$ns" "$pod" -c "$c" --previous --tail=$tail > "$dest/log.${c}.previous.txt" 2>&1 || true
   done
   for c in $init_containers; do
-    $KC_CMD logs -n "$ns" "$pod" -c "$c" --tail=$tail > "$dest/log.init.${c}.txt" 2>&1 || true
+    kc logs -n "$ns" "$pod" -c "$c" --tail=$tail > "$dest/log.init.${c}.txt" 2>&1 || true
   done
 
-  $KC_CMD get events -n "$ns" --field-selector involvedObject.name="$pod" --sort-by='.lastTimestamp' > "$dest/events.txt" 2>&1 || true
+  kc get events -n "$ns" --field-selector involvedObject.name="$pod" --sort-by='.lastTimestamp' > "$dest/events.txt" 2>&1 || true
 }
 
 # diag_collect_node_journal <node> <destdir>
@@ -65,7 +65,7 @@ diag_collect_node_journal() {
     echo "no node provided"
     return 0
   fi
-  $KC_CMD describe node "$node" > "$dest/node.describe.txt" 2>&1 || true
+  kc describe node "$node" > "$dest/node.describe.txt" 2>&1 || true
   # try docker container with same name
   if command -v docker >/dev/null 2>&1; then
     local docker_name

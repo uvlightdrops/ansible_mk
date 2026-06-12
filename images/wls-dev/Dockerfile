@@ -4,13 +4,15 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Allow passing a public key at build time so the image can be built with key-based SSH access.
 ARG SSH_PUBKEY=""
 
-# Minimal image with OpenJDK and openssh for dev/testing only
+# Minimal image with OpenJDK, Python and openssh for dev/testing only
 # Use OpenJDK 17 on Ubuntu 24.04 by default (adjust if you need a different Java version)
 RUN apt-get update && \
-    apt-get install -y openjdk-17-jdk openssh-server sudo && \
-    # create weblogic and docker users for dev/ansible access
+    apt-get install -y openjdk-17-jdk openssh-server sudo python3 && \
     useradd -m -s /bin/bash weblogic && \
     useradd -m -s /bin/bash docker && \
+    mkdir -p /etc/sudoers.d && \
+    echo 'docker ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/docker && \
+    chmod 0440 /etc/sudoers.d/docker && \
     mkdir -p /var/run/sshd /home/weblogic/.ssh /home/docker/.ssh && \
     chown -R weblogic:weblogic /home/weblogic && \
     chown -R docker:docker /home/docker && \

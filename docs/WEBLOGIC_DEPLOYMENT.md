@@ -93,7 +93,7 @@ kc rollout restart statefulset/wls-managed-3 -n weblogic
 
 Hilfs‑Skripte
 ------------
-- `prepare_docker/deploy-ssh-keys.sh` bereitet die Minikube Node‑Container vor (legt /home/docker an, kopiert `setup_user.sh` und deinen Public Key, bereitet hostPath PV Pfade vor).
+- `prepare_docker/pd/deploy-ssh-keys.sh` bereitet die Minikube Node‑Container vor (legt /home/docker an, kopiert `setup_user.sh` und deinen Public Key, bereitet hostPath PV Pfade vor).
 - `prepare_docker/fix_wls_pods.sh` startet Rollouts, wartet auf Pods und verteilt (idempotent) den Public Key in die Pods falls nötig.
 
 NodePort / SSH Zugriff

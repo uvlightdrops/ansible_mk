@@ -3,8 +3,8 @@
 # - first play: ensure python3 exists using raw commands (no facts)
 # - second play: gather facts and run simple checks (ping, create marker file)
 
-- name: Bootstrap nodes - install python if missing
-  hosts: all
+- name: Bootstrap Minikube nodes - install python if missing
+  hosts: control:workers
   gather_facts: no
   become: yes
   tasks:
@@ -23,8 +23,32 @@
           exit 1
         fi
 
-- name: Verify connectivity and perform simple tasks
-  hosts: all
+- name: Bootstrap WebLogic SSH targets - ensure python is reachable
+  hosts: weblogic_ssh
+  gather_facts: no
+  tasks:
+    - name: Ensure Python3 is present or install it with passwordless sudo
+      raw: |
+        if command -v python3 >/dev/null 2>&1; then
+          echo 'python3 already present'
+          exit 0
+        fi
+        if command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1; then
+          if command -v apt-get >/dev/null 2>&1; then
+            sudo -n apt-get update && sudo -n apt-get install -y python3 || exit 1
+          elif command -v yum >/dev/null 2>&1; then
+            sudo -n yum install -y python3 || exit 1
+          else
+            echo 'No known package manager found to install python3' >&2
+            exit 1
+          fi
+        else
+          echo 'python3 is missing and passwordless sudo is not available for this SSH target' >&2
+          exit 1
+        fi
+
+- name: Verify Minikube node connectivity and perform simple tasks
+  hosts: control:workers
   gather_facts: yes
   become: yes
   tasks:
@@ -36,5 +60,18 @@
         path: /tmp/ansible_bootstrapped
         state: touch
         owner: docker
+        mode: '0644'
+
+- name: Verify WebLogic SSH target connectivity and perform simple tasks
+  hosts: weblogic_ssh
+  gather_facts: yes
+  tasks:
+    - name: Ping
+      ping:
+
+    - name: Create marker file to indicate bootstrap
+      file:
+        path: /tmp/ansible_bootstrapped
+        state: touch
         mode: '0644'
 

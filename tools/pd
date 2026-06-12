@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# Wrapper to call the Python CLI for prepare_docker_py
-# Usage: pd <subcommand> [args]
+
+# Primary wrapper to call the shell orchestrator.
+# Usage: pd <command> [global options] [command options]
 
 # Resolve repo root (assume tools/ is at repo root)
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
 
-PYTHON=${PYTHON:-python3}
-CLI_PATH="$REPO_ROOT/prepare_docker_py/cli.py"
+CLI_PATH="$REPO_ROOT/prepare_docker/pd.sh"
 
 if [ ! -f "$CLI_PATH" ]; then
-  echo "prepare_docker_py CLI not found at $CLI_PATH" >&2
+  echo "prepare_docker shell CLI not found at $CLI_PATH" >&2
   exit 2
 fi
 
-exec "$PYTHON" "$CLI_PATH" "$@"
+exec "$CLI_PATH" "$@"
 

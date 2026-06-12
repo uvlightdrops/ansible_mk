@@ -11,17 +11,14 @@
   gather_facts: yes
   become: yes
   vars:
-    weblogic_user: docker
-    weblogic_group: docker
-    weblogic_home: /u01/oracle
-    domain_home: /u01/domains
-    installer_dest: /tmp/weblogic_installer
-    # Path relative to playbook (control host). Put the installer into ansible/files/
-    weblogic_installer_src: files/fmw_generic_installer.jar
+    weblogic_user: "{{ serviceuser | default('docker') }}"
+    weblogic_group: "{{ servicegroup | default(weblogic_user) }}"
+    weblogic_home: "{{ wls_location | default('/u01/oracle') }}"
+    domain_home: "{{ domain_location | default('/u01/domains') }}"
+    domain_name_local: "{{ DOMAIN_NAME | default(domain_name | default('sample-domain1')) }}"
+    installer_dest: "{{ installer_workdir | default('/tmp/weblogic_installer') }}"
     weblogic_installer_filename: "{{ weblogic_installer_src | basename }}"
-    response_template: templates/response.rsp.j2
-    java_package_apt: openjdk-17-jdk
-    java_package_yum: java-17-openjdk-devel
+    response_template: "{{ weblogic_response_template | default('templates/response.rsp.j2') }}"
 
   tasks:
     - name: Ensure Java is installed (Debian/RedHat)
@@ -39,6 +36,7 @@
       loop:
         - "{{ weblogic_home }}"
         - "{{ domain_home }}"
+        - "{{ domain_home }}/{{ domain_name_local }}"
         - "{{ installer_dest }}"
 
     - name: Upload WebLogic installer to target
@@ -71,7 +69,7 @@
 
     - name: Create domain directory marker
       file:
-        path: "{{ domain_home }}/.weblogic_installed"
+        path: "{{ domain_home }}/{{ domain_name_local }}/.weblogic_installed"
         state: touch
         owner: "{{ weblogic_user }}"
         mode: '0644'
