@@ -1,0 +1,8 @@
+apiVersion: weblogic.oracle/v8
+kind: Domain
+metadata:
+  name: sample-domain1
+spec:
+  adminServer:
+    nodePort: 30701
+

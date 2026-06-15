@@ -1,14 +1,20 @@
-WebLogic Deployment (Ansible + Minikube) - Kurzangaben
+WebLogic Deployment (Ansible + Kustomize Overlays) - Kurzangaben
 
 Überblick
 ---------
 Dieses Verzeichnis enthält ein Minimal‑Ansible‑Playbook und Beispielmanifeste, um den WebLogic Kubernetes Operator
-und eine Domain in einer Minikube‑Umgebung (Dev) bereitzustellen.
+und eine Domain sowohl in einer Minikube‑Umgebung (Dev) als auch in einem gehosteten Kubernetes über
+Kustomize Overlays bereitzustellen.
 
 Wichtige Dateien
 ----------------
 - `deploy_weblogic.yml`  - Haupt‑Playbook (lokal, connection: local)
 - `group_vars/all.yml`   - zentrale Variablen (Namespace, DomainUID, Image, PV‑Pfad)
+- `group_vars/env_minikube.yml` - Overlay-/Playbook-Overrides für Minikube
+- `group_vars/env_hosted.yml` - Overlay-/Playbook-Overrides für gehostetes Kubernetes
+- `k8s/base/`           - gemeinsame portable Manifeste
+- `k8s/overlays/minikube/` - lokale Minikube-Anpassungen
+- `k8s/overlays/hosted/` - hosted-cluster-spezifische Anpassungen
 - `k8s/operator.yaml`    - Platzhalter für den Operator‑Manifest (lade offiziellen Release hierher)
 - `k8s/pv.yaml`          - hostPath PersistentVolume (Dev)
 - `k8s/pvc-weblogic-home.yaml` - PersistentVolumeClaim (Domain home)
@@ -40,19 +46,32 @@ curl -L -o k8s/operator.yaml \
 
 2) Variablen anpassen: `group_vars/all.yml` (Admin Passwort, image etc.)
 
-3) Kubeconfig exportieren (Minikube‑Profil):
+3) Gewünschte Umgebung auswählen:
+
+- lokal: `group_vars/env_minikube.yml`
+- gehostet: `group_vars/env_hosted.yml`
+
+Passe bei Hosted mindestens Namespace und StorageClass an.
+
+4) Kubeconfig exportieren (Minikube‑Profil):
 
 ```bash
 export KUBECONFIG="$(minikube -p wlcluster kubeconfig)"
 ```
 
-4) Playbook ausführen:
+5) Playbook ausführen:
 
 ```bash
-ansible-playbook deploy_weblogic.yml
+ansible-playbook k8s_weblogic/deploy_weblogic.yml -e @group_vars/env_minikube.yml
 ```
 
-5) Prüfen:
+Für ein gehostetes Cluster:
+
+```bash
+ansible-playbook k8s_weblogic/deploy_weblogic.yml -e @group_vars/env_hosted.yml
+```
+
+6) Prüfen:
 
 ```bash
 minikube -p wlcluster kubectl -- get pods -n weblogic -o wide
@@ -62,6 +81,8 @@ minikube -p wlcluster kubectl -- get domains -n weblogic
 Hinweise
 --------
 - Für Entwicklung ist `hostPath` ausreichend; in Produktion nutze eine StorageClass mit dynamischer Provisionierung.
+- Für gehostete Cluster ohne Adminrechte sollten `Namespace`, `CRDs`, `StorageClass`, Ingress und ggf. der Operator
+  vom Plattform-Team bereitgestellt werden.
 - Wenn Pods im Status `ImagePullBackOff` sind, prüfe `imagePullSecrets` oder lade das Image auf die Nodes.
 - API‑Version der Domain CR (`apiVersion: weblogic.oracle/v8`) hängt vom Operator‑Release ab — gegebenenfalls anpassen.
 - Sensible Werte (Passwörter) in Ansible Vault speichern.

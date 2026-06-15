@@ -49,4 +49,13 @@ ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev
 operator_manifest: k8s/operator.yaml
 domain_manifest: k8s/domain.yaml
 
+# Environment-aware deployment defaults.
+# Minikube remains the safe default; override with -e @group_vars/env_hosted.yml
+# when targeting the shared/hosted cluster.
+kustomize_overlay: k8s/overlays/minikube
+manage_namespace: true
+apply_operator: true
+create_admin_secret: true
+wait_for_admin: true
+
 

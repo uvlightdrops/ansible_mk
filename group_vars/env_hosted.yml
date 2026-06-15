@@ -1,0 +1,36 @@
+---
+# Environment overrides for a centrally hosted/shared Kubernetes cluster.
+# Adjust the values below to match your platform requirements.
+#
+# DO NOT store secrets here - use Ansible Vault or external secret management!
+# For testing only, override with: ansible-playbook deploy_weblogic.yml -e weblogic_admin_password=...
+#
+namespace: weblogic
+kustomize_overlay: k8s/overlays/hosted
+
+# ======== Hosted-specific deployment flags ========
+# Controls what the playbook does on the hosted cluster
+manage_namespace: false
+  # false = assume your namespace already exists (safe for hosted clusters)
+  # true = playbook creates a new namespace
+
+apply_operator: false
+  # false = assume WebLogic Operator is centrally managed by platform team
+  # true = playbook installs operator (needs cluster-admin or sufficient RBAC)
+
+create_admin_secret: true
+  # true = create or update admin credentials secret
+  # (Keep this true; adjust the password in group_vars/all.yml or use Vault)
+
+wait_for_admin: true
+  # true = playbook waits for admin pod to be ready (recommended)
+  # false = skip pod readiness checks (for CI/CD automation)
+
+# ======== Optional overrides (uncomment to use) ========
+# These can override values from group_vars/all.yml for this environment specifically.
+
+# domain_uid: sample-domain1          # Domain name in K8S
+# weblogic_admin_user: admin          # WebLogic admin user
+# weblogic_admin_password: ChangeMe!  # ⚠️ Use Vault in production!
+# weblogic_image: "harbor.example.com/weblogic/wls:14.1.1.0"
+

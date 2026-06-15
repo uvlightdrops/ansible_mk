@@ -9,12 +9,13 @@ spec:
   domainUID: sample-domain1
   image: "REPLACE_WITH_YOUR_WLS_IMAGE"
   imagePullPolicy: IfNotPresent
+  imagePullSecrets:
+    - name: wls-image-secret
   webLogicCredentialsSecret: weblogic-admin-credentials
   serverStartPolicy: "IfNeeded"
   adminServer:
     serverName: admin-server
     serverStartState: RUNNING
-    nodePort: 30701
   clusters:
     - clusterName: sample-cluster
       replicas: 2
@@ -23,6 +24,9 @@ spec:
       claimName: pvc-weblogic-home
     path: /u01/domains/sample-domain1
 
-# NOTE: This is a minimal template. Consult the Operator documentation for full schema
-# and for specific apiVersion matching the operator you installed.
+# NOTE: This is a minimal template. Keep portable defaults in this base manifest.
+# Environment-specific settings such as admin nodePort, storage class or ingress
+# belong into the Kustomize overlays under k8s/overlays/.
+# Consult the Operator documentation for full schema and for the specific
+# apiVersion matching the operator you installed.
 

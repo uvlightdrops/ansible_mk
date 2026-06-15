@@ -1,0 +1,17 @@
+# Patch: Set the StorageClass for the WebLogic domain PVC on hosted cluster.
+#
+# Choose ONE of these based on your workload needs:
+#   - metro-nas      (fast NAS, higher cost) - recommended for production
+#   - metro-nas-eco  (cost-optimized NAS) - recommended for dev/test
+#   - NOT metro-san-eco (already used by microservices app - risk of contention)
+#
+# Edit: Change REPLACE_WITH_SHARED_STORAGECLASS below
+#
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-weblogic-home
+spec:
+  storageClassName: "metro-nas-eco"
+  # Change ↑ to "metro-nas" if you want faster performance
+

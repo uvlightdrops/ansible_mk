@@ -1,0 +1,9 @@
+---
+# Environment overrides for the local Minikube-based setup.
+namespace: weblogic
+kustomize_overlay: k8s/overlays/minikube
+manage_namespace: true
+apply_operator: true
+create_admin_secret: true
+wait_for_admin: true
+
