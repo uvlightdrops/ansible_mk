@@ -1,0 +1,46 @@
+# MEMO für Cluster-Admins: WebLogic Operator CRDs
+
+**Bitte diese Datei einmalig in den Cluster einspielen:**
+
+```bash
+kubectl apply -f operator-crds-cluster-admin.yaml
+```
+
+## Was wird installiert?
+
+```yaml
+- CustomResourceDefinition: domains.weblogic.oracle
+  Erlaubt: kubectl apply -f domain.yaml
+  Betrifft: Alle Namespaces
+
+- CustomResourceDefinition: clusters.weblogic.oracle
+  Erlaubt: kubectl apply -f cluster.yaml
+  Betrifft: Alle Namespaces
+```
+
+## Überprüfung
+
+```bash
+kubectl get crd domains.weblogic.oracle
+kubectl get crd clusters.weblogic.oracle
+```
+
+## Sicherheit
+
+✅ **Harmlos für andere Namespaces**
+- Nur Registrierungen, keine echten Ressourcen
+- Keine RBAC-Changes
+- Keine Daten in externen Namespaces
+
+## Das war's!
+
+Nach der Installation können Namespace-User ihre eigenen WebLogic Operatoren installieren:
+
+```bash
+kubectl apply -f operator-namespace.yaml  # (machen die einzelnen User)
+```
+
+---
+
+**Fragen?** Siehe `README_OPERATOR_SETUP.md`
+

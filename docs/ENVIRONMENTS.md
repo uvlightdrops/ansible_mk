@@ -7,6 +7,7 @@ Pflege **beide Umgebungen im selben Git-Branch**, aber trenne sie **im Verzeichn
 - `k8s/base/` = portable, gemeinsame Manifeste
 - `k8s/overlays/minikube/` = lokale Entwicklungsanpassungen
 - `k8s/overlays/hosted/` = Anpassungen für das zentral gehostete Cluster
+- `k8s/overlays/manual/` = manueller WebLogic-Weg ohne Operator (legacy-orientiert)
 
 ## Warum kein eigener Git-Branch pro Umgebung?
 
@@ -62,6 +63,21 @@ Nur für das gehostete Cluster:
 - keine `NodePort`-Services
 - Patch für PVC-StorageClass
 
+### `k8s/overlays/manual/`
+Manueller Weg ohne WebLogic Operator:
+
+- `../../namespace.yaml`
+- `../../pv.yaml`
+- `../../pvc-weblogic-home.yaml`
+- `../../gen-ssh-keys-config.yaml`
+- `../../weblogic-authorized-keys.yaml`
+- `../../services-clusterip.yaml`
+- `../../services-nodeports.yaml`
+- `../../deploy-wls-admin.yaml`
+- `../../deploy-wls-managed-{1,2,3}.yaml`
+- `../../deploy-test-db.yaml`
+- Patch für PVC `storageClassName: manual`
+
 ## Deployment über Ansible
 
 Das Playbook `k8s_weblogic/deploy_weblogic.yml` ist jetzt overlay-fähig.
@@ -78,6 +94,13 @@ ansible-playbook k8s_weblogic/deploy_weblogic.yml -e @group_vars/env_minikube.ym
 ```bash
 cd /home/flow/dev_mk/ansible_mk
 ansible-playbook k8s_weblogic/deploy_weblogic.yml -e @group_vars/env_hosted.yml
+```
+
+### Manueller Weg (ohne Operator)
+
+```bash
+cd /home/flow/dev_mk/ansible_mk
+ansible-playbook k8s_weblogic/deploy_weblogic.yml -e @group_vars/env_manual.yml
 ```
 
 ## Was du vor dem ersten Hosted-Deployment anpassen musst

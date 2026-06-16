@@ -1,0 +1,12 @@
+---
+# Environment overrides for manual WebLogic bootstrapping (without Operator).
+# This path keeps your legacy/manual service setup and converts it to Ansible/Kustomize.
+namespace: weblogic
+kustomize_overlay: k8s/overlays/manual
+
+# Manual path defaults
+manage_namespace: true
+apply_operator: false
+create_admin_secret: false
+wait_for_admin: false
+

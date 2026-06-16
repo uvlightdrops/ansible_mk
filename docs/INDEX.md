@@ -209,6 +209,9 @@ A: Lese [QUICK_START.md](QUICK_START.md#häufige-fehler) oder [HARBOR_SETUP.md](
 **Q: Wie deploye ich auch auf Staging/Prod?**
 A: Duplicate overlay: `k8s/overlays/staging/`, `k8s/overlays/prod/`. Copy-paste und anpassen.
 
+**Q: Ich will erstmal ohne Operator manuell weitermachen — geht das?**
+A: Ja, nutze `k8s/overlays/manual/` mit `-e @group_vars/env_manual.yml`.
+
 ---
 
 ## 🏗️ Datei-Struktur
@@ -248,6 +251,7 @@ group_vars/
 ├── all.yml                      ← Base configuration
 ├── env_minikube.yml             ← Minikube environment
 ├── env_hosted.yml               ← Hosted cluster environment
+├── env_manual.yml               ← Manual path without Operator
 └── operator-hosted-values.yaml  ← Hosted operator Helm values
 ```
 
