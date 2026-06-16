@@ -10,6 +10,10 @@ __pycache__/
 _bak_*
 .idea
 
+# Python venv (setup_venv.sh)
+.venv/
+*.egg-info/
+
 # machine-specific – never commit
 inventory.yaml
 prepare_docker/config.local.sh

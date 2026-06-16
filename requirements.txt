@@ -1,0 +1,19 @@
+# Python dependencies for running Ansible from a venv (no sudo needed)
+# Usage:
+#   python3 -m venv .venv
+#   source .venv/bin/activate
+#   pip install -r requirements.txt
+
+# --- Core ---
+ansible-core>=2.16,<2.18
+
+# --- Kubernetes collections need these ---
+kubernetes>=28.1.0
+PyYAML>=6.0
+
+# --- Ansible Vault support ---
+cryptography>=41.0
+
+# --- Optional: nicer output ---
+jmespath>=1.0   # needed for json_query filter
+
