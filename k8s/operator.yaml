@@ -1,10 +1,15 @@
 # Operator manifest placeholder
-# Download the official WebLogic Kubernetes Operator manifest into this file
-# Example:
-# curl -L -o k8s/operator.yaml \
-#   https://github.com/oracle/weblogic-kubernetes-operator/releases/download/<tag>/weblogic-operator.yaml
 #
-# After placing the operator manifest here, the playbook will apply it.
+# The old release asset URL used in older docs no longer exists.
+# Generate this file with:
+#   ./scripts/render_weblogic_operator_manifest.sh
+#
+# The generated file combines:
+#   - domain-crd.yaml
+#   - cluster-crd.yaml
+#   - the rendered Helm chart for the WebLogic Operator
+#
+# After generating this file, the playbook can apply it.
 
-# (This file intentionally left as a placeholder.)
+# (This file is intentionally left as a placeholder until generated.)
 

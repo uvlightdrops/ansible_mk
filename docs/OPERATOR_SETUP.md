@@ -34,43 +34,45 @@ Frage deinen Cluster-Betreiber:
 
 ## Schritt 3: Operator selbst installieren (falls erlaubt)
 
-### Option A: Neutrale Variant (empfohlen für Hosted)
+### Option A: Empfohlener Weg für v4.3.9
+
+Der alte Direkt-Link `.../releases/download/v4.3.9/weblogic-operator.yaml` existiert **nicht** mehr.
+Für v4.3.9 installierst du den Operator heute über den **Helm-Chart** plus die beiden CRDs.
+
+**CRDs für v4.3.9:**
 
 ```bash
-# 1. Lade den Operator herunter
-OPERATOR_VERSION="4.1.0"
-curl -L -o /tmp/weblogic-operator.yaml \
-  "https://github.com/oracle/weblogic-kubernetes-operator/releases/download/v${OPERATOR_VERSION}/weblogic-operator.yaml"
-
-# 2. Prüfe die Manifest-Struktur
-head -30 /tmp/weblogic-operator.yaml
-
-# 3. Für Hosted Cluster: Ändere den Namespace (falls nötig)
-# Standard: der Operator läuft in weblogic-operator namespace
-# Ggf. bekommst du einen anderen Namespace vom Team
-
-sed -i 's/namespace: weblogic-operator/namespace: weblogic/' /tmp/weblogic-operator.yaml
-
-# 4. Anwenden
-kubectl apply -f /tmp/weblogic-operator.yaml
-
-# 5. Warten bis Operator läuft
-kubectl wait --for=condition=available --timeout=300s \
-  deployment/weblogic-operator -n weblogic-operator
-
-# 6. CRDs verifizieren
-kubectl api-resources | grep domain
+kubectl apply -f https://raw.githubusercontent.com/oracle/weblogic-kubernetes-operator/v4.3.9/kubernetes/crd/domain-crd.yaml
+kubectl apply -f https://raw.githubusercontent.com/oracle/weblogic-kubernetes-operator/v4.3.9/kubernetes/crd/cluster-crd.yaml
 ```
 
-### Option B: Als YAML in `k8s/operator.yaml` registrieren
+**Helm-Chart installieren:**
 
 ```bash
-# Dann wird das Playbook den Operator automatisch installieren
-cp /tmp/weblogic-operator.yaml /home/flow/dev_mk/ansible_mk/k8s/operator.yaml
+helm repo add weblogic-operator https://oracle.github.io/weblogic-kubernetes-operator/charts --force-update
+helm repo update
 
-# Und `group_vars/env_hosted.yml` anpassen:
-# apply_operator: true
+# Namespace für den Operator
+kubectl create namespace weblogic-operator
+
+# Hosted-Cluster-freundliche Werte verwenden
+helm install sample-weblogic-operator \
+  weblogic-operator/weblogic-operator \
+  --namespace weblogic-operator \
+  --values k8s/operator-hosted-values.yaml \
+  --wait
 ```
+
+### Option B: Manifest lokal im Repo erzeugen
+
+Wenn du weiterhin mit `kubectl apply -f k8s/operator.yaml` arbeiten willst, nutze:
+
+```bash
+./scripts/render_weblogic_operator_manifest.sh
+kubectl apply -f k8s/operator.yaml
+```
+
+Der Generator kombiniert die CRDs und das vom Helm-Chart gerenderte Operator-Manifest in `k8s/operator.yaml`.
 
 ---
 
@@ -160,7 +162,7 @@ kubectl describe domain sample-domain1 -n weblogic
 
 | WebLogic | Operator Version | Kubernetes |
 |----------|-----------------|-----------|
-| 14.1.1.0 | 4.1.x, 4.0.x    | 1.20+     |
+| 14.1.1.0 | 4.3.x, 4.2.x    | 1.20+     |
 | 12.2.1.4 | 3.3.x, 3.2.x    | 1.16+     |
 
 Prüfe die offizielle Dokumentation: https://github.com/oracle/weblogic-kubernetes-operator

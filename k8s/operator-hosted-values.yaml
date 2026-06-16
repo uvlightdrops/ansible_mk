@@ -1,0 +1,18 @@
+# Hosted-cluster-friendly defaults for WebLogic Operator 4.3.9
+#
+# Use this file when installing the operator into a namespace you control,
+# while avoiding cluster-wide RBAC objects as much as possible.
+#
+# IMPORTANT:
+# - CRDs (domains.weblogic.oracle / clusters.weblogic.oracle) must already exist
+#   in the cluster or be installed by someone with cluster-scoped privileges.
+# - If your platform team already runs the operator centrally, you do not need this file.
+
+serviceAccount: default
+domainNamespaceSelectionStrategy: Dedicated
+enableClusterRoleBinding: false
+operatorOnly: true
+imagePullPolicy: IfNotPresent
+externalRestEnabled: false
+elkIntegrationEnabled: false
+

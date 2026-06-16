@@ -48,6 +48,7 @@
 - 🔍 Wie man prüft ob der Operator läuft
 - 📦 Wie man ihn selbst installiert (falls nötig)
 - 🐛 Troubleshooting: CRDs nicht da, Pod crasht, etc.
+- 🧩 Nutzt `k8s/operator-hosted-values.yaml` und `scripts/render_weblogic_operator_manifest.sh`
 
 **Zielgruppe:** Wer mit Operator-Installation zu tun hat.
 
@@ -117,6 +118,21 @@ bash scripts/setup_harbor_secret.sh <harbor-host> <username> [namespace]
 - Gibt Next-Steps aus
 
 **Wann:** Nach dem Harbor-Image-Upload
+
+---
+
+### `render_weblogic_operator_manifest.sh`
+```bash
+bash scripts/render_weblogic_operator_manifest.sh [v4.3.9]
+```
+
+**Was es macht:**
+- Klont den Operator-Source-Tag
+- Rendert das Helm-Chart des WebLogic Operators
+- Lädt die Domain- und Cluster-CRDs herunter
+- Schreibt ein direkt anwendbares `k8s/operator.yaml`
+
+**Wann:** Wenn du weiterhin mit einer einzelnen Manifestdatei arbeiten willst
 
 ---
 
@@ -231,7 +247,8 @@ k8s/
 group_vars/
 ├── all.yml                      ← Base configuration
 ├── env_minikube.yml             ← Minikube environment
-└── env_hosted.yml               ← Hosted cluster environment
+├── env_hosted.yml               ← Hosted cluster environment
+└── operator-hosted-values.yaml  ← Hosted operator Helm values
 ```
 
 ---
