@@ -1,5 +1,6 @@
 #!/bin/bash
-# Pre-flight check for WebLogic Kubernetes deployment on hosted cluster
+# Pre-flight check for WebLogic Kubernetes deployment on hosted cluster.
+# Scope: hosted/operator-based overlay only.
 # Usage: ./preflight_check.sh [namespace]
 
 set -e
@@ -24,6 +25,7 @@ echo "================================"
 echo "WebLogic Hosted Cluster Pre-flight Check"
 echo "Namespace: $NAMESPACE"
 echo "================================"
+echo "Hint: overlay-scoped path: scripts/overlays/hosted/preflight_check.sh"
 echo ""
 
 # 1. Cluster connectivity (RBAC-safe)
