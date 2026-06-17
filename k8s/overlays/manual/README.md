@@ -1,31 +1,53 @@
 # Manual Overlay (ohne WebLogic Operator)
 
-Dieses Overlay bildet den manuellen/legacy-nahen Weg ab:
+Dieser Pfad deployt klassische Deployments/Services direkt, ohne Domain-CR und ohne Operator.
 
-- Namespace
-- PV/PVC
-- SSH-ConfigMaps
-- Services (ClusterIP + NodePort)
-- Admin + Managed Server Deployments
-- Test-DB
+## Kurz: Overlay und Kustomization
 
-## Anwenden über Ansible
+- `k8s/overlays/*` sind Umgebungsvarianten (minikube/hosted/manual).
+- `kustomization.yaml` ist die Zusammensetzung: welche Ressourcen + welche Patches gelten.
+- Build/Apply ist normalerweise: `kubectl apply -k <overlay-dir>`.
+
+## Warum bei `apply -k` ein `security`-Fehler kommt
+
+In diesem Repo referenziert das Overlay Dateien per `../../...` (z. B. `../../namespace.yaml`).
+Der in `kubectl` eingebaute Kustomize-Loader blockiert standardmaessig Dateien ausserhalb des Overlay-Verzeichnisses.
+
+Typischer Fehler:
+
+```text
+accumulating resources from '../../namespace.yaml': security; file is not in or below ...
+```
+
+## Manueller Deploy ohne Kustomize (empfohlen fuer jetzt)
 
 ```bash
 cd /home/flow/dev_mk/ansible_mk
-ansible-playbook k8s_weblogic/deploy_weblogic.yml -e @group_vars/env_manual.yml
+kubectl apply -f k8s/namespace.yaml
+kubectl apply -f k8s/pv.yaml
+kubectl apply -f k8s/pvc-weblogic-home.yaml
+kubectl apply -f k8s/gen-ssh-keys-config.yaml
+kubectl apply -f k8s/weblogic-authorized-keys.yaml
+kubectl apply -f k8s/services-clusterip.yaml
+kubectl apply -f k8s/services-nodeports.yaml
+kubectl apply -f k8s/deploy-test-db.yaml
+kubectl apply -f k8s/deploy-wls-admin.yaml
+kubectl apply -f k8s/deploy-wls-managed-1.yaml
+kubectl apply -f k8s/deploy-wls-managed-2.yaml
+kubectl apply -f k8s/deploy-wls-managed-3.yaml
 ```
-
-## Direkter Kustomize-Check
 
 ```bash
-cd /home/flow/dev_mk/ansible_mk
-kubectl kustomize k8s/overlays/manual
+kubectl get pods -n weblogic -w
 ```
+
+## Optional ueber Ansible
+
+`group_vars/env_manual.yml` setzt zwar `apply_operator: false`, nutzt aber intern derzeit `kubectl apply -k`.
+Bei dem oben genannten Loader-Fehler daher aktuell besser den manuellen `kubectl apply -f ...`-Pfad nutzen.
 
 ## Hinweise
 
-- Der Overlay verwendet aktuell `storageClassName: manual`.
-- Die Workload-Manifeste referenzieren aktuell `wls-dev:1.3`.
-- Für Hosted Cluster ohne NodePort/PV solltest du ein zusätzliches Overlay von `manual/` ableiten.
+- `storageClassName` fuer den Manual-Pfad wird ueber die PVC-Manifestdatei bestimmt.
+- Workloads referenzieren im Repo-Stand typischerweise `wls-dev:1.3`.
 

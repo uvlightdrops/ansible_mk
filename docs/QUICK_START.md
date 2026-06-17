@@ -18,6 +18,15 @@ kubectl api-resources | grep domain
 # Falls angezeigt wird → OK, weiter mit Minute 2
 ```
 
+Wenn Operator aktuell nicht nutzbar ist, nutze stattdessen direkt den manuellen Pfad:
+
+```bash
+cd /home/flow/dev_mk/ansible_mk
+bash scripts/deploy_manual_no_operator.sh
+```
+
+Details: `docs/MANUAL_DEPLOY_NO_OPERATOR.md`
+
 ---
 
 ## Minute 2-5: Harbor-Image vorbereiten

@@ -83,6 +83,15 @@
 
 ---
 
+### 8. **[MANUAL_DEPLOY_NO_OPERATOR.md](MANUAL_DEPLOY_NO_OPERATOR.md)** - Manuelles Deployment ohne Operator
+- 🧱 Direkter `kubectl apply -f ...` Ablauf
+- 🛠️ Ein-Befehl-Skript: `scripts/deploy_manual_no_operator.sh`
+- 🐛 Umgang mit Kustomize `security`-Fehler bei `../../...` Referenzen
+
+**Zielgruppe:** Cluster ohne nutzbaren WebLogic Operator.
+
+---
+
 ## 🛠️ Hilfsskripte
 
 Alle im `scripts/`-Verzeichnis.
@@ -133,6 +142,20 @@ bash scripts/render_weblogic_operator_manifest.sh [v4.3.9]
 - Schreibt ein direkt anwendbares `k8s/operator.yaml`
 
 **Wann:** Wenn du weiterhin mit einer einzelnen Manifestdatei arbeiten willst
+
+---
+
+### `deploy_manual_no_operator.sh`
+```bash
+bash scripts/deploy_manual_no_operator.sh [--kc-cmd "kubectl --context <ctx>"] [--dry-run]
+```
+
+**Was es macht:**
+- Wendet die no-operator Manifeste in fester Reihenfolge an
+- Umgeht den Kustomize `security`-Load-Restrictor
+- Zeigt danach Pod/Service/PVC-Status an
+
+**Wann:** Wenn der WebLogic Operator nicht verfuegbar ist
 
 ---
 
@@ -210,7 +233,7 @@ A: Lese [QUICK_START.md](QUICK_START.md#häufige-fehler) oder [HARBOR_SETUP.md](
 A: Duplicate overlay: `k8s/overlays/staging/`, `k8s/overlays/prod/`. Copy-paste und anpassen.
 
 **Q: Ich will erstmal ohne Operator manuell weitermachen — geht das?**
-A: Ja, nutze `k8s/overlays/manual/` mit `-e @group_vars/env_manual.yml`.
+A: Ja. Nutze [MANUAL_DEPLOY_NO_OPERATOR.md](MANUAL_DEPLOY_NO_OPERATOR.md) und `scripts/deploy_manual_no_operator.sh`.
 
 ---
 
@@ -223,12 +246,14 @@ docs/
 ├── HARBOR_SETUP.md              ← Image-Registry (Skopeo, Credentials)
 ├── HOSTED_SETUP_CHECKLIST.md    ← Alles was auf dem Cluster sein muss
 ├── INDEX.md                     ← Diese Datei
+├── MANUAL_DEPLOY_NO_OPERATOR.md ← No-Operator Runbook
 ├── OPERATOR_SETUP.md            ← WebLogic Operator Installation
 ├── QUICK_START.md               ← 10-Minuten deploy
 └── WEBLOGIC_DEPLOYMENT.md       ← Klassische Anleitung (Referenz)
 
 scripts/
 ├── preflight_check.sh           ← Pre-deployment validation
+├── deploy_manual_no_operator.sh ← Manual deploy without Operator
 ├── setup_harbor_secret.sh       ← ImagePullSecret helper
 └── ...
 
