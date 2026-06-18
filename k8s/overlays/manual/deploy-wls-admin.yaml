@@ -12,6 +12,8 @@ spec:
       labels:
         app: wls-admin
     spec:
+      imagePullSecrets:
+      - name: wls-image-secret
       volumes:
       - name: domain-home
         persistentVolumeClaim:

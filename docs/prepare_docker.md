@@ -1,5 +1,15 @@
 # prepare_docker — Hilfs‑Skripte für Minikube / Dev Cluster
 
+## Geltungsbereich (wichtig)
+
+`prepare_docker/*` ist der **Minikube-Dev-Pfad** mit SSH-Hilfen.
+
+- Minikube-SSH Deploys: `k8s/overlays/minikube/deploy-wls-*.yaml`
+- Standard/Kubernetes-only Deploys (ohne SSH): `k8s/deploy-wls-*.yaml`
+- Manual Overlay (ohne Operator, ohne SSH): `k8s/overlays/manual/`
+
+Wenn du auf hosted/manual Cluster arbeitest, nutze nicht die SSH-spezifischen Schritte aus diesem Dokument.
+
 ## Neu strukturierter Einstieg: `prepare_docker/pd.sh`
 
 Um die historisch gewachsenen Einzel-Skripte konsistenter zu bedienen, gibt es jetzt einen zentralen Shell-Entry-Point:

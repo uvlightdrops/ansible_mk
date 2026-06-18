@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: wls-managed-2
+spec:
+  replicas: 1
+  serviceName: wls-managed-2-headless
+  selector:
+    matchLabels:
+      app: wls-managed-2
+  template:
+    metadata:
+      labels:
+        app: wls-managed-2
+    spec:
+      volumes:
+      - name: ssh-keys
+        emptyDir: {}
+      - name: home
+        emptyDir: {}
+      - name: domain-home
+        persistentVolumeClaim:
+          claimName: pvc-weblogic-home
+      - name: weblogic-pubkeys
+        configMap:
+          name: weblogic-authorized-keys
+          defaultMode: 0644
+      - name: gen-ssh-keys-script
+        configMap:
+          name: gen-ssh-keys-script
+          defaultMode: 0755
+
+      initContainers:
+      - name: gen-ssh-keys
+        image: wls-dev:1.3
+        command:
+          - /bin/sh
+          - -c
+          - /scripts/gen-ssh-keys.sh
+        securityContext:
+          runAsUser: 1000
+          runAsNonRoot: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
+          seccompProfile:
+            type: RuntimeDefault
+        volumeMounts:
+          - name: ssh-keys
+            mountPath: /etc/ssh
+          - name: home
+            mountPath: /home/docker
+          - name: gen-ssh-keys-script
+            mountPath: /scripts
+            readOnly: true
+          - name: weblogic-pubkeys
+            mountPath: /pubkeys
+            readOnly: true
+
+      containers:
+      - name: wls-managed
+        image: wls-dev:1.3
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          runAsUser: 1000
+          runAsNonRoot: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
+          seccompProfile:
+            type: RuntimeDefault
+        # Override CMD: keep container alive while sshd runs in background (entrypoint.sh).
+        args: ["sleep", "infinity"]
+        ports:
+        - containerPort: 22
+        volumeMounts:
+        - name: ssh-keys
+          mountPath: /etc/ssh
+        - name: home
+          mountPath: /home/docker
+        - name: weblogic-pubkeys
+          mountPath: /pubkeys
+          readOnly: true
+        - name: domain-home
+          mountPath: /u01/domains
+

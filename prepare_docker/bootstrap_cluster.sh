@@ -191,10 +191,11 @@ apply k8s/services-clusterip.yaml
 apply k8s/services-nodeports.yaml
 
 # Deployments last (depend on ConfigMaps + PVC)
-apply k8s/deploy-wls-admin.yaml
-apply k8s/deploy-wls-managed-1.yaml
-apply k8s/deploy-wls-managed-2.yaml
-apply k8s/deploy-wls-managed-3.yaml
+# Minikube SSH profile uses dedicated overlay manifests.
+apply k8s/overlays/minikube/deploy-wls-admin.yaml
+apply k8s/overlays/minikube/deploy-wls-managed-1.yaml
+apply k8s/overlays/minikube/deploy-wls-managed-2.yaml
+apply k8s/overlays/minikube/deploy-wls-managed-3.yaml
 apply k8s/deploy-test-db.yaml
 
 echo "  All manifests applied."

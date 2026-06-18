@@ -110,7 +110,7 @@ Fuer den manuellen Pfad ohne Operator:
 ```bash
 cd /home/flow/dev_mk/ansible_mk
 cp scripts/manual_harbor.env.example scripts/manual_harbor.env
-# scripts/manual_harbor.env anpassen (KC_CMD, WLS_IMAGE)
+# scripts/manual_harbor.env anpassen (KC_CMD, WLS_IMAGE, optional DB_IMAGE)
 scripts/deploy_manual_harbor.sh
 ```
 
@@ -120,8 +120,11 @@ Ohne Config-Datei:
 cd /home/flow/dev_mk/ansible_mk
 scripts/deploy_manual_harbor.sh \
   --kc-cmd "kubectl --context <dein-context>" \
-  --image harbor.example.com/<projekt>/wls-dev:1.3
+  --image harbor.example.com/<projekt>/wls-dev:1.3 \
+  --db-image harbor.example.com/<projekt>/postgres:15
 ```
+
+Hinweis: `--db-image` ist nur noetig, wenn eure Policy auch das Standard-Image `postgres:15` blockiert.
 
 ---
 

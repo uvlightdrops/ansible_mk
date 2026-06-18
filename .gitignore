@@ -17,4 +17,6 @@ _bak_*
 # machine-specific – never commit
 inventory.yaml
 prepare_docker/config.local.sh
+env.py
+env_*
 

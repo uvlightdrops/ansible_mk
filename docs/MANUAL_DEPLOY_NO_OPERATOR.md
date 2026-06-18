@@ -7,6 +7,7 @@ Der manuelle Pfad ist dabei eine eigene Zielumgebung (z. B. fuer restriktive geh
 
 Die manuellen Pod-Deployments liegen unter `k8s/overlays/manual/` und enthalten
 einen restriktiven `securityContext` (`runAsUser`, `runAsNonRoot`, `allowPrivilegeEscalation: false`, `capabilities.drop: ["ALL"]`).
+Auch `k8s/deploy-test-db.yaml` ist auf PodSecurity `restricted` ausgelegt.
 
 Im aktuellen Manual-Pfad werden keine SSH-Keys/SSH-NodePorts mehr verwendet.
 Pod-Zugriffe fuer Automation laufen ueber `kubectl exec`.
@@ -46,6 +47,22 @@ cd /home/flow/dev_mk/ansible_mk
 scripts/deploy_manual_no_operator.sh --image harbor.example.com/<projekt>/wls-dev:1.3
 ```
 
+Alternativ lesen die Deploy-Skripte standardmaessig den ersten `image:`-Eintrag aus
+`k8s_weblogic/main-env.yaml`.
+
+```bash
+cd /home/flow/dev_mk/ansible_mk
+scripts/deploy_manual_no_operator.sh --main-env-file k8s_weblogic/main-env.yaml
+```
+Falls auch `postgres:15` (Docker Hub) durch dieselbe Policy blockiert wird, setze zusaetzlich ein DB-Image:
+
+```bash
+cd /home/flow/dev_mk/ansible_mk
+scripts/deploy_manual_no_operator.sh \
+  --image harbor.example.com/<projekt>/wls-dev:1.3 \
+  --db-image harbor.example.com/<projekt>/postgres:15
+```
+
 Alternativ per Env-Variable:
 
 ```bash
@@ -68,8 +85,12 @@ Ohne lokale Config-Datei geht es auch direkt per CLI:
 cd /home/flow/dev_mk/ansible_mk
 scripts/deploy_manual_harbor.sh \
   --kc-cmd "kubectl --context <dein-context>" \
-  --image harbor.example.com/<projekt>/wls-dev:1.3
+  --image harbor.example.com/<projekt>/wls-dev:1.3 \
+  --db-image harbor.example.com/<projekt>/postgres:15
 ```
+
+Die vier WLS-Workloads nutzen `imagePullSecrets` mit dem Secret-Namen `wls-image-secret`.
+Erstelle das Secret vor dem Deploy im Ziel-Namespace `wl`.
 
 Wenn dein User im Namespace keine PVC-Rechte hat (`kubectl auth can-i get/create pvc -n wl` = `no`),
 kannst du den PVC-Schritt ebenfalls auslassen:

@@ -15,6 +15,7 @@ APPLY_PV="false"
 SKIP_PVC="false"
 PVC_STORAGE_CLASS=""
 IMAGE_OVERRIDE="${WLS_IMAGE:-}"
+DB_IMAGE_OVERRIDE="${DB_IMAGE:-}"
 
 escape_sed_replacement() {
   printf '%s' "$1" | sed 's/[&|]/\\&/g'
@@ -30,7 +31,39 @@ render_manifest_for_apply() {
     return
   fi
 
+  if [ -n "$DB_IMAGE_OVERRIDE" ] && [ "$manifest" = "k8s/deploy-test-db.yaml" ]; then
+    local escaped_db_image
+    escaped_db_image="$(escape_sed_replacement "$DB_IMAGE_OVERRIDE")"
+    sed "s|image: postgres:15|image: ${escaped_db_image}|g" "$REPO_ROOT/$manifest"
+    return
+  fi
+
   cat "$REPO_ROOT/$manifest"
+}
+
+ensure_registry_image_set() {
+  local found_local_tag="false"
+  local manifest
+
+  [ -n "$IMAGE_OVERRIDE" ] && return 0
+
+  for manifest in \
+    "k8s/overlays/manual/deploy-wls-admin.yaml" \
+    "k8s/overlays/manual/deploy-wls-managed-1.yaml" \
+    "k8s/overlays/manual/deploy-wls-managed-2.yaml" \
+    "k8s/overlays/manual/deploy-wls-managed-3.yaml"; do
+    if grep -qE '^\s*image:\s*wls-dev:1\.3\s*$' "$REPO_ROOT/$manifest"; then
+      found_local_tag="true"
+      break
+    fi
+  done
+
+  if [ "$found_local_tag" = "true" ]; then
+    echo "ERROR: WLS image is still set to local tag wls-dev:1.3 in manual manifests." >&2
+    echo "       Set an allowed registry image via --image or WLS_IMAGE." >&2
+    echo "       Example: --image harbor.example.com/team/wls-dev:1.3" >&2
+    exit 1
+  fi
 }
 
 usage() {
@@ -42,6 +75,8 @@ Options:
       --kc-cmd <cmd>        kubectl command (default: $KC_CMD or kubectl)
       --image <ref>         Override image in manual WLS manifests
                              (or set env var WLS_IMAGE)
+      --db-image <ref>      Override image in test-db manifest
+                             (or set env var DB_IMAGE)
       --dry-run             Use kubectl apply --dry-run=client
       --create-namespace    Create namespace if missing (uses --namespace value)
       --with-pv             Also apply cluster-scoped PV manifest (k8s/pv.yaml)
@@ -53,6 +88,7 @@ Examples:
   scripts/deploy_manual_no_operator.sh
   scripts/deploy_manual_no_operator.sh -n wl --kc-cmd "kubectl --context mycluster"
   scripts/deploy_manual_no_operator.sh --image harbor.example.com/team/wls-dev:1.3
+  scripts/deploy_manual_no_operator.sh --image harbor.example.com/team/wls-dev:1.3 --db-image harbor.example.com/team/postgres:15
   scripts/deploy_manual_no_operator.sh --with-pv
   scripts/deploy_manual_no_operator.sh --skip-pvc
   scripts/deploy_manual_no_operator.sh --create-namespace --with-pv --pvc-storage-class metro-nas
@@ -72,6 +108,10 @@ while [ "$#" -gt 0 ]; do
       ;;
     --image)
       IMAGE_OVERRIDE="$2"
+      shift 2
+      ;;
+    --db-image)
+      DB_IMAGE_OVERRIDE="$2"
       shift 2
       ;;
     --dry-run)
@@ -107,6 +147,8 @@ while [ "$#" -gt 0 ]; do
 done
 
 read -r -a KC <<<"$KC_CMD"
+
+ensure_registry_image_set
 
 MANIFESTS=(
   "k8s/pv.yaml"
@@ -144,6 +186,7 @@ echo "Apply PV: $APPLY_PV"
 echo "Skip PVC: $SKIP_PVC"
 echo "PVC storageClass patch: ${PVC_STORAGE_CLASS:-<none>}"
 echo "Image override: ${IMAGE_OVERRIDE:-<none>}"
+echo "DB image override: ${DB_IMAGE_OVERRIDE:-<none>}"
 
 echo
 for manifest in "${MANIFESTS[@]}"; do

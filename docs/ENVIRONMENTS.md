@@ -9,6 +9,11 @@ Pflege **beide Umgebungen im selben Git-Branch**, aber trenne sie **im Verzeichn
 - `k8s/overlays/hosted/` = Anpassungen für das zentral gehostete Cluster
 - `k8s/overlays/manual/` = manueller WebLogic-Weg ohne Operator (eigene Zielumgebung)
 
+Wichtige Regel seit der Bereinigung:
+
+- `k8s/deploy-wls-*.yaml` im Repo-Root sind **SSH-frei** (Kubernetes-only).
+- SSH-bezogene Deployments liegen **nur** unter `k8s/overlays/minikube/`.
+
 ## Warum kein eigener Git-Branch pro Umgebung?
 
 Ein Branch ist gut für:
@@ -52,9 +57,15 @@ Nur lokal:
 
 - `../../namespace.yaml`
 - `../../pv.yaml`
+- `../../gen-ssh-keys-config.yaml`
+- `../../weblogic-authorized-keys.yaml`
 - `../../services-nodeports.yaml`
+- `deploy-wls-admin.yaml`
+- `deploy-wls-managed-{1,2,3}.yaml`
 - Patch für PVC `storageClassName: manual`
 - Patch für `spec.adminServer.nodePort: 30701`
+
+Hinweis: Diese Deploy-Dateien enthalten InitContainer/SSH-Setup nur für Minikube-Dev.
 
 ### `k8s/overlays/hosted/`
 Nur für das gehostete Cluster:
@@ -74,10 +85,26 @@ Automation innerhalb der Pods erfolgt dabei ueber `kubectl exec` statt SSH.
 - `../../pv.yaml`
 - `../../pvc-weblogic-home.yaml`
 - `../../services-clusterip.yaml`
-- `../../deploy-wls-admin.yaml`
-- `../../deploy-wls-managed-{1,2,3}.yaml`
+- `deploy-wls-admin.yaml`
+- `deploy-wls-managed-{1,2,3}.yaml`
 - `../../deploy-test-db.yaml`
 - Patch für PVC `storageClassName: manual`
+
+Hinweis: Diese Variante ist bewusst SSH-frei; Automation in Pods erfolgt per `kubectl exec`.
+
+## Image-Profile (empfohlene Namenskonvention)
+
+Zur klaren Trennung der Laufzeitprofile:
+
+- Minikube mit SSH: `wls-dev-ssh:<tag>`
+- Kubernetes ohne SSH (manual/hosted): `wls-dev-k8s:<tag>`
+
+Beispiel:
+
+- `harbor.example.com/team/wls-dev-ssh:1.3`
+- `harbor.example.com/team/wls-dev-k8s:1.3`
+
+So ist im Incident-Fall sofort sichtbar, welches Image fuer welches Overlay gedacht ist.
 
 ## Deployment über Ansible
 

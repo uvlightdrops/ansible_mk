@@ -4,7 +4,13 @@ resources:
   - ../../base
   - ../../namespace.yaml
   - ../../pv.yaml
+  - ../../gen-ssh-keys-config.yaml
+  - ../../weblogic-authorized-keys.yaml
   - ../../services-nodeports.yaml
+  - deploy-wls-admin.yaml
+  - deploy-wls-managed-1.yaml
+  - deploy-wls-managed-2.yaml
+  - deploy-wls-managed-3.yaml
 patches:
   - path: patch-pvc-storageclass.yaml
   - path: patch-domain-admin-nodeport.yaml
