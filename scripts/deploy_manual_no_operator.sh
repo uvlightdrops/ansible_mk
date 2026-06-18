@@ -14,6 +14,24 @@ CREATE_NAMESPACE="false"
 APPLY_PV="false"
 SKIP_PVC="false"
 PVC_STORAGE_CLASS=""
+IMAGE_OVERRIDE="${WLS_IMAGE:-}"
+
+escape_sed_replacement() {
+  printf '%s' "$1" | sed 's/[&|]/\\&/g'
+}
+
+render_manifest_for_apply() {
+  local manifest="$1"
+
+  if [ -n "$IMAGE_OVERRIDE" ] && [[ "$manifest" == k8s/overlays/manual/deploy-wls-* ]]; then
+    local escaped_image
+    escaped_image="$(escape_sed_replacement "$IMAGE_OVERRIDE")"
+    sed "s|image: wls-dev:1.3|image: ${escaped_image}|g" "$REPO_ROOT/$manifest"
+    return
+  fi
+
+  cat "$REPO_ROOT/$manifest"
+}
 
 usage() {
   cat <<'EOF'
@@ -22,6 +40,8 @@ Usage: scripts/deploy_manual_no_operator.sh [options]
 Options:
   -n, --namespace <ns>      Namespace (default: wl)
       --kc-cmd <cmd>        kubectl command (default: $KC_CMD or kubectl)
+      --image <ref>         Override image in manual WLS manifests
+                             (or set env var WLS_IMAGE)
       --dry-run             Use kubectl apply --dry-run=client
       --create-namespace    Create namespace if missing (uses --namespace value)
       --with-pv             Also apply cluster-scoped PV manifest (k8s/pv.yaml)
@@ -32,6 +52,7 @@ Options:
 Examples:
   scripts/deploy_manual_no_operator.sh
   scripts/deploy_manual_no_operator.sh -n wl --kc-cmd "kubectl --context mycluster"
+  scripts/deploy_manual_no_operator.sh --image harbor.example.com/team/wls-dev:1.3
   scripts/deploy_manual_no_operator.sh --with-pv
   scripts/deploy_manual_no_operator.sh --skip-pvc
   scripts/deploy_manual_no_operator.sh --create-namespace --with-pv --pvc-storage-class metro-nas
@@ -47,6 +68,10 @@ while [ "$#" -gt 0 ]; do
       ;;
     --kc-cmd)
       KC_CMD="$2"
+      shift 2
+      ;;
+    --image)
+      IMAGE_OVERRIDE="$2"
       shift 2
       ;;
     --dry-run)
@@ -86,10 +111,7 @@ read -r -a KC <<<"$KC_CMD"
 MANIFESTS=(
   "k8s/pv.yaml"
   "k8s/pvc-weblogic-home.yaml"
-  "k8s/gen-ssh-keys-config.yaml"
-  "k8s/weblogic-authorized-keys.yaml"
   "k8s/services-clusterip.yaml"
-  "k8s/services-nodeports.yaml"
   "k8s/deploy-test-db.yaml"
   "k8s/overlays/manual/deploy-wls-admin.yaml"
   "k8s/overlays/manual/deploy-wls-managed-1.yaml"
@@ -121,6 +143,7 @@ echo "Create namespace: $CREATE_NAMESPACE"
 echo "Apply PV: $APPLY_PV"
 echo "Skip PVC: $SKIP_PVC"
 echo "PVC storageClass patch: ${PVC_STORAGE_CLASS:-<none>}"
+echo "Image override: ${IMAGE_OVERRIDE:-<none>}"
 
 echo
 for manifest in "${MANIFESTS[@]}"; do
@@ -137,10 +160,10 @@ for manifest in "${MANIFESTS[@]}"; do
 
   echo "==> Applying $manifest"
   if [ "$DRY_RUN" = "true" ]; then
-    "${KC[@]}" apply --dry-run=client -f "$REPO_ROOT/$manifest" -n "$NAMESPACE"
+    render_manifest_for_apply "$manifest" | "${KC[@]}" apply --dry-run=client -f - -n "$NAMESPACE"
   else
     set +e
-    out=$("${KC[@]}" apply -f "$REPO_ROOT/$manifest" -n "$NAMESPACE" 2>&1)
+    out=$(render_manifest_for_apply "$manifest" | "${KC[@]}" apply -f - -n "$NAMESPACE" 2>&1)
     rc=$?
     set -e
 

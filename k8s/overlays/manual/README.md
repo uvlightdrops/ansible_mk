@@ -1,6 +1,7 @@
 # Manual Overlay (ohne WebLogic Operator)
 
 Dieser Pfad deployt klassische Deployments/Services direkt, ohne Domain-CR und ohne Operator.
+Der Manual-Pfad ist SSH-frei; Automation in Pods erfolgt ueber `kubectl exec`.
 
 ## Kurz: Overlay und Kustomization
 
@@ -26,10 +27,7 @@ cd /home/flow/dev_mk/ansible_mk
 kubectl apply -f k8s/namespace.yaml
 kubectl apply -f k8s/pv.yaml
 kubectl apply -f k8s/pvc-weblogic-home.yaml
-kubectl apply -f k8s/gen-ssh-keys-config.yaml
-kubectl apply -f k8s/weblogic-authorized-keys.yaml
 kubectl apply -f k8s/services-clusterip.yaml
-kubectl apply -f k8s/services-nodeports.yaml
 kubectl apply -f k8s/deploy-test-db.yaml
 kubectl apply -f k8s/deploy-wls-admin.yaml
 kubectl apply -f k8s/deploy-wls-managed-1.yaml

@@ -3,8 +3,13 @@
 Dieses Runbook ist fuer den Fall gedacht, dass der WebLogic Operator nicht genutzt werden kann.
 Es deployt die Workloads direkt als Deployments/Services.
 
+Der manuelle Pfad ist dabei eine eigene Zielumgebung (z. B. fuer restriktive gehostete Cluster).
+
 Die manuellen Pod-Deployments liegen unter `k8s/overlays/manual/` und enthalten
 einen restriktiven `securityContext` (`runAsUser`, `runAsNonRoot`, `allowPrivilegeEscalation: false`, `capabilities.drop: ["ALL"]`).
+
+Im aktuellen Manual-Pfad werden keine SSH-Keys/SSH-NodePorts mehr verwendet.
+Pod-Zugriffe fuer Automation laufen ueber `kubectl exec`.
 
 ## Kurz erklaert: Overlays und Kustomization
 
@@ -32,6 +37,39 @@ scripts/deploy_manual_no_operator.sh
 
 Hinweis: Standardmaessig werden `k8s/namespace.yaml` und `k8s/pv.yaml` dabei **nicht** angewendet.
 Damit ist der Default fuer eingeschraenkte Cluster-RBAC geeignet.
+
+Wenn dein Cluster Admission-Policy wie `deny-foreign-registries` erzwingt,
+musst du ein erlaubtes Image-Repository angeben:
+
+```bash
+cd /home/flow/dev_mk/ansible_mk
+scripts/deploy_manual_no_operator.sh --image harbor.example.com/<projekt>/wls-dev:1.3
+```
+
+Alternativ per Env-Variable:
+
+```bash
+cd /home/flow/dev_mk/ansible_mk
+WLS_IMAGE=harbor.example.com/<projekt>/wls-dev:1.3 scripts/deploy_manual_no_operator.sh
+```
+
+Bequemer fuer den Alltag ist der Wrapper `scripts/deploy_manual_harbor.sh`:
+
+```bash
+cd /home/flow/dev_mk/ansible_mk
+cp scripts/manual_harbor.env.example scripts/manual_harbor.env
+# Datei anpassen: KC_CMD und WLS_IMAGE setzen
+scripts/deploy_manual_harbor.sh
+```
+
+Ohne lokale Config-Datei geht es auch direkt per CLI:
+
+```bash
+cd /home/flow/dev_mk/ansible_mk
+scripts/deploy_manual_harbor.sh \
+  --kc-cmd "kubectl --context <dein-context>" \
+  --image harbor.example.com/<projekt>/wls-dev:1.3
+```
 
 Wenn dein User im Namespace keine PVC-Rechte hat (`kubectl auth can-i get/create pvc -n wl` = `no`),
 kannst du den PVC-Schritt ebenfalls auslassen:
@@ -109,11 +147,13 @@ scripts/undeploy_manual_no_operator.sh --kc-cmd "kubectl --context <dein-context
 
 Hinweis: Das Namespace-Objekt `wl` bleibt dabei standardmaessig erhalten.
 
-Wenn du keine Rechte auf PV-Loeschung hast:
+PV-Loeschung ist standardmaessig deaktiviert (RBAC-freundlich):
 
 ```bash
 cd /home/flow/dev_mk/ansible_mk
-scripts/undeploy_manual_no_operator.sh --skip-pv --kc-cmd "kubectl --context <dein-context>"
+scripts/undeploy_manual_no_operator.sh --kc-cmd "kubectl --context <dein-context>"
+
+Nur wenn du PV explizit loeschen willst, nutze `--delete-pv`.
 ```
 
 Wenn du das Namespace-Objekt explizit mit entfernen willst:
@@ -144,10 +184,7 @@ Reihenfolge fuer den manuellen Start (ohne Operator):
 kubectl apply -f k8s/namespace.yaml
 kubectl apply -f k8s/pv.yaml
 kubectl apply -f k8s/pvc-weblogic-home.yaml
-kubectl apply -f k8s/gen-ssh-keys-config.yaml
-kubectl apply -f k8s/weblogic-authorized-keys.yaml
 kubectl apply -f k8s/services-clusterip.yaml
-kubectl apply -f k8s/services-nodeports.yaml
 kubectl apply -f k8s/deploy-test-db.yaml
 kubectl apply -f k8s/overlays/manual/deploy-wls-admin.yaml
 kubectl apply -f k8s/overlays/manual/deploy-wls-managed-1.yaml

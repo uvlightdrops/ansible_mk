@@ -77,10 +77,7 @@ MANIFESTS=(
   "k8s/overlays/manual/deploy-wls-managed-1.yaml"
   "k8s/overlays/manual/deploy-wls-admin.yaml"
   "k8s/deploy-test-db.yaml"
-  "k8s/services-nodeports.yaml"
   "k8s/services-clusterip.yaml"
-  "k8s/weblogic-authorized-keys.yaml"
-  "k8s/gen-ssh-keys-config.yaml"
   "k8s/pvc-weblogic-home.yaml"
   "k8s/pv.yaml"
 )

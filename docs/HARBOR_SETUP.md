@@ -78,11 +78,11 @@ kubectl create secret docker-registry wls-image-secret \
   --docker-username=$HARBOR_USER \
   --docker-password=$HARBOR_PASSWORD \
   --docker-email="no-reply@example.com" \
-  -n weblogic
+  -n wl
 
 # Verifizieren:
-kubectl get secret wls-image-secret -n weblogic -o yaml
-kubectl get secret wls-image-secret -n weblogic -o jsonpath='{.data.*}' | base64 -d | jq '.'
+kubectl get secret wls-image-secret -n wl -o yaml
+kubectl get secret wls-image-secret -n wl -o jsonpath='{.data.*}' | base64 -d | jq '.'
 ```
 
 ---
@@ -99,6 +99,28 @@ Falls du einen privaten Namespace nutzen möchtest:
 
 ```yaml
 weblogic_image: "harbor.example.com/mycompany/weblogic/wls:14.1.1.0"
+```
+
+---
+
+## Schritt 5b: Manuellen Deployment-Pfad mit Harbor nutzen
+
+Fuer den manuellen Pfad ohne Operator:
+
+```bash
+cd /home/flow/dev_mk/ansible_mk
+cp scripts/manual_harbor.env.example scripts/manual_harbor.env
+# scripts/manual_harbor.env anpassen (KC_CMD, WLS_IMAGE)
+scripts/deploy_manual_harbor.sh
+```
+
+Ohne Config-Datei:
+
+```bash
+cd /home/flow/dev_mk/ansible_mk
+scripts/deploy_manual_harbor.sh \
+  --kc-cmd "kubectl --context <dein-context>" \
+  --image harbor.example.com/<projekt>/wls-dev:1.3
 ```
 
 ---
@@ -123,18 +145,18 @@ imagePullPolicy: Always        # Always pull (safer for CI/CD)
 
 ```bash
 # Symptom:
-kubectl describe pod <pod-name> -n weblogic
+kubectl describe pod <pod-name> -n wl
 # → Events: ImagePullBackOff, pull access denied
 
 # Behebung:
 # 1. Secret prüfen
-kubectl get secret wls-image-secret -n weblogic -o yaml
+kubectl get secret wls-image-secret -n wl -o yaml
 
 # 2. Credentials prüfen
 echo -n "user:password" | base64
 
 # 3. Image-URL prüfen
-kubectl get secret wls-image-secret -n weblogic -o jsonpath='{.data.\.dockercfg}' | base64 -d | jq '.auths'
+kubectl get secret wls-image-secret -n wl -o jsonpath='{.data.\.dockercfg}' | base64 -d | jq '.auths'
 
 # 4. Manuelles Login testen
 docker login harbor.example.com
@@ -145,16 +167,16 @@ docker pull harbor.example.com/weblogic/wls:14.1.1.0
 
 ```bash
 # Falls Credentials sich ändern:
-kubectl delete secret wls-image-secret -n weblogic
+kubectl delete secret wls-image-secret -n wl
 kubectl create secret docker-registry wls-image-secret \
   --docker-server=harbor.example.com \
   --docker-username=$NEW_USER \
   --docker-password=$NEW_PASSWORD \
-  -n weblogic
+  -n wl
 
 # Pods neustarten, um neues Secret zu laden
-kubectl rollout restart deployment/wls-admin -n weblogic
-kubectl rollout restart statefulset/wls-managed-1 -n weblogic
+kubectl rollout restart deployment/wls-admin -n wl
+kubectl rollout restart statefulset/wls-managed-1 -n wl
 # ... etc
 ```
 
@@ -165,7 +187,7 @@ kubectl rollout restart statefulset/wls-managed-1 -n weblogic
 - [ ] Harbor Project `weblogic` erstellt
 - [ ] WebLogic Image zu Harbor gepusht (mit `skopeo` oder `docker`)
 - [ ] Image-Name und Tag notiert: `harbor.example.com/weblogic/wls:14.1.1.0`
-- [ ] ImagePullSecret `wls-image-secret` in Namespace `weblogic` erstellt
+- [ ] ImagePullSecret `wls-image-secret` in Namespace `wl` erstellt
 - [ ] Credentials im Secret geprüft + verifiziert
 - [ ] `weblogic_image` in `group_vars/all.yml` aktualisiert
 - [ ] Lokal getestet: `docker pull <image>` mit Credentials aus dem Secret
@@ -180,7 +202,7 @@ Wenn alles vorbereitet:
 cd /home/flow/dev_mk/ansible_mk
 
 # Pre-flight-Check
-bash scripts/preflight_check.sh weblogic
+bash scripts/overlays/hosted/preflight_check.sh wl
 
 # Ansible spielen starten (hosted cluster)
 ansible-playbook k8s_weblogic/deploy_weblogic.yml \

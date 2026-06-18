@@ -6,13 +6,15 @@ set -e
 
 HARBOR_HOST="${1:-}"
 HARBOR_USER="${2:-}"
-NAMESPACE="${3:-weblogic}"
+NAMESPACE="${3:-wl}"
+KUBECTL_CMD="${KUBECTL_CMD:-kubectl}"
+read -r -a KCTL <<<"$KUBECTL_CMD"
 
 if [ -z "$HARBOR_HOST" ] || [ -z "$HARBOR_USER" ]; then
   echo "Usage: $0 <harbor-host> <username> [namespace]"
   echo ""
   echo "Example:"
-  echo "  $0 harbor.example.com myuser weblogic"
+  echo "  $0 harbor.example.com myuser wl"
   echo ""
   exit 1
 fi
@@ -30,7 +32,7 @@ read -sp "Enter Harbor password for '$HARBOR_USER': " HARBOR_PASS
 echo ""
 
 # Verify namespace exists
-if ! kubectl get namespace "$NAMESPACE" >/dev/null 2>&1; then
+if ! "${KCTL[@]}" get namespace "$NAMESPACE" >/dev/null 2>&1; then
   echo "Error: Namespace '$NAMESPACE' does not exist."
   echo "Create it with: kubectl create namespace $NAMESPACE"
   exit 1
@@ -39,13 +41,13 @@ fi
 # Create secret
 echo ""
 echo "Creating ImagePullSecret 'wls-image-secret' in namespace '$NAMESPACE'..."
-kubectl create secret docker-registry wls-image-secret \
+"${KCTL[@]}" create secret docker-registry wls-image-secret \
   --docker-server="$HARBOR_HOST" \
   --docker-username="$HARBOR_USER" \
   --docker-password="$HARBOR_PASS" \
   --docker-email="no-reply@example.com" \
   -n "$NAMESPACE" \
-  --dry-run=client -o yaml | kubectl apply -f -
+  --dry-run=client -o yaml | "${KCTL[@]}" apply -f -
 
 echo ""
 echo "✓ Secret created/updated"
@@ -53,11 +55,11 @@ echo ""
 
 # Verify
 echo "Verifying secret..."
-if kubectl get secret wls-image-secret -n "$NAMESPACE" >/dev/null 2>&1; then
+if "${KCTL[@]}" get secret wls-image-secret -n "$NAMESPACE" >/dev/null 2>&1; then
   echo "✓ Secret exists in namespace '$NAMESPACE'"
   echo ""
   echo "Secret details:"
-  kubectl get secret wls-image-secret -n "$NAMESPACE" -o yaml | grep -E 'name:|docker'
+  "${KCTL[@]}" get secret wls-image-secret -n "$NAMESPACE" -o yaml | grep -E 'name:|docker'
 else
   echo "✗ Failed to create secret"
   exit 1

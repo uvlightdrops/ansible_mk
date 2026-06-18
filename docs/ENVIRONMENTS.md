@@ -7,7 +7,7 @@ Pflege **beide Umgebungen im selben Git-Branch**, aber trenne sie **im Verzeichn
 - `k8s/base/` = portable, gemeinsame Manifeste
 - `k8s/overlays/minikube/` = lokale Entwicklungsanpassungen
 - `k8s/overlays/hosted/` = Anpassungen für das zentral gehostete Cluster
-- `k8s/overlays/manual/` = manueller WebLogic-Weg ohne Operator (legacy-orientiert)
+- `k8s/overlays/manual/` = manueller WebLogic-Weg ohne Operator (eigene Zielumgebung)
 
 ## Warum kein eigener Git-Branch pro Umgebung?
 
@@ -66,13 +66,14 @@ Nur für das gehostete Cluster:
 ### `k8s/overlays/manual/`
 Manueller Weg ohne WebLogic Operator:
 
+Diese Variante ist eine gleichwertige Umgebung
+fuer Cluster, in denen der Operator nicht eingesetzt wird oder nicht eingesetzt werden kann.
+Automation innerhalb der Pods erfolgt dabei ueber `kubectl exec` statt SSH.
+
 - `../../namespace.yaml`
 - `../../pv.yaml`
 - `../../pvc-weblogic-home.yaml`
-- `../../gen-ssh-keys-config.yaml`
-- `../../weblogic-authorized-keys.yaml`
 - `../../services-clusterip.yaml`
-- `../../services-nodeports.yaml`
 - `../../deploy-wls-admin.yaml`
 - `../../deploy-wls-managed-{1,2,3}.yaml`
 - `../../deploy-test-db.yaml`
