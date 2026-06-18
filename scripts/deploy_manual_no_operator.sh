@@ -10,7 +10,8 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 NAMESPACE="weblogic"
 KC_CMD="${KC_CMD:-kubectl}"
 DRY_RUN="false"
-SKIP_PV="false"
+CREATE_NAMESPACE="false"
+APPLY_PV="false"
 PVC_STORAGE_CLASS=""
 
 usage() {
@@ -21,14 +22,16 @@ Options:
   -n, --namespace <ns>      Namespace (default: weblogic)
       --kc-cmd <cmd>        kubectl command (default: $KC_CMD or kubectl)
       --dry-run             Use kubectl apply --dry-run=client
-      --skip-pv             Skip cluster-scoped PV manifest (k8s/pv.yaml)
+      --create-namespace    Also apply namespace manifest (k8s/namespace.yaml)
+      --with-pv             Also apply cluster-scoped PV manifest (k8s/pv.yaml)
       --pvc-storage-class   Patch pvc-weblogic-home to use this StorageClass
   -h, --help                Show help
 
 Examples:
   scripts/deploy_manual_no_operator.sh
   scripts/deploy_manual_no_operator.sh -n weblogic --kc-cmd "kubectl --context mycluster"
-  scripts/deploy_manual_no_operator.sh --skip-pv --pvc-storage-class metro-nas
+  scripts/deploy_manual_no_operator.sh --with-pv
+  scripts/deploy_manual_no_operator.sh --create-namespace --with-pv --pvc-storage-class metro-nas
   scripts/deploy_manual_no_operator.sh --dry-run
 EOF
 }
@@ -47,8 +50,12 @@ while [ "$#" -gt 0 ]; do
       DRY_RUN="true"
       shift 1
       ;;
-    --skip-pv)
-      SKIP_PV="true"
+    --create-namespace)
+      CREATE_NAMESPACE="true"
+      shift 1
+      ;;
+    --with-pv)
+      APPLY_PV="true"
       shift 1
       ;;
     --pvc-storage-class)
@@ -95,13 +102,19 @@ echo "Repo root: $REPO_ROOT"
 echo "Namespace: $NAMESPACE"
 echo "kubectl cmd: $KC_CMD"
 echo "Dry run: $DRY_RUN"
-echo "Skip PV: $SKIP_PV"
+echo "Create namespace: $CREATE_NAMESPACE"
+echo "Apply PV: $APPLY_PV"
 echo "PVC storageClass patch: ${PVC_STORAGE_CLASS:-<none>}"
 
 echo
 for manifest in "${MANIFESTS[@]}"; do
-  if [ "$manifest" = "k8s/pv.yaml" ] && [ "$SKIP_PV" = "true" ]; then
-    echo "==> Skipping $manifest (--skip-pv)"
+  if [ "$manifest" = "k8s/namespace.yaml" ] && [ "$CREATE_NAMESPACE" != "true" ]; then
+    echo "==> Skipping $manifest (default behavior; use --create-namespace to apply it)"
+    continue
+  fi
+
+  if [ "$manifest" = "k8s/pv.yaml" ] && [ "$APPLY_PV" != "true" ]; then
+    echo "==> Skipping $manifest (default behavior; use --with-pv to apply it)"
     continue
   fi
 

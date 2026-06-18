@@ -30,18 +30,21 @@ cd /home/flow/dev_mk/ansible_mk
 scripts/deploy_manual_no_operator.sh
 ```
 
-Wenn dein User **keine Rechte fuer cluster-scoped PersistentVolumes** hat:
+Hinweis: Standardmaessig werden `k8s/namespace.yaml` und `k8s/pv.yaml` dabei **nicht** angewendet.
+Damit ist der Default fuer eingeschraenkte Cluster-RBAC geeignet.
+
+Wenn du Namespace und PV explizit mit anlegen willst:
 
 ```bash
 cd /home/flow/dev_mk/ansible_mk
-scripts/deploy_manual_no_operator.sh --skip-pv
+scripts/deploy_manual_no_operator.sh --create-namespace --with-pv
 ```
 
 Wenn der PVC danach `Pending` bleibt, setze explizit eine erlaubte StorageClass:
 
 ```bash
 cd /home/flow/dev_mk/ansible_mk
-scripts/deploy_manual_no_operator.sh --skip-pv --pvc-storage-class metro-nas
+scripts/deploy_manual_no_operator.sh --pvc-storage-class metro-nas
 ```
 
 Mit explizitem Cluster-Context:
@@ -94,11 +97,20 @@ cd /home/flow/dev_mk/ansible_mk
 scripts/undeploy_manual_no_operator.sh --kc-cmd "kubectl --context <dein-context>"
 ```
 
-Wenn du keine Rechte auf PV/Namespace-Loeschung hast:
+Hinweis: Das Namespace-Objekt `weblogic` bleibt dabei standardmaessig erhalten.
+
+Wenn du keine Rechte auf PV-Loeschung hast:
 
 ```bash
 cd /home/flow/dev_mk/ansible_mk
-scripts/undeploy_manual_no_operator.sh --skip-pv --skip-namespace --kc-cmd "kubectl --context <dein-context>"
+scripts/undeploy_manual_no_operator.sh --skip-pv --kc-cmd "kubectl --context <dein-context>"
+```
+
+Wenn du das Namespace-Objekt explizit mit entfernen willst:
+
+```bash
+cd /home/flow/dev_mk/ansible_mk
+scripts/undeploy_manual_no_operator.sh --delete-namespace --kc-cmd "kubectl --context <dein-context>"
 ```
 
 Nur Vorschau:

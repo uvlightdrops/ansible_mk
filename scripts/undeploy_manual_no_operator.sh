@@ -11,7 +11,7 @@ NAMESPACE="weblogic"
 KC_CMD="${KC_CMD:-kubectl}"
 DRY_RUN="false"
 SKIP_PV="false"
-SKIP_NAMESPACE="false"
+DELETE_NAMESPACE="false"
 
 usage() {
   cat <<'EOF'
@@ -22,13 +22,14 @@ Options:
       --kc-cmd <cmd>        kubectl command (default: $KC_CMD or kubectl)
       --dry-run             Print delete commands, do not execute
       --skip-pv             Do not delete cluster-scoped PV manifest (k8s/pv.yaml)
-      --skip-namespace      Keep namespace object (k8s/namespace.yaml)
+      --delete-namespace    Also delete namespace object (k8s/namespace.yaml)
   -h, --help                Show help
 
 Examples:
   scripts/undeploy_manual_no_operator.sh
   scripts/undeploy_manual_no_operator.sh --kc-cmd "kubectl --context mycluster"
-  scripts/undeploy_manual_no_operator.sh --skip-pv --skip-namespace
+  scripts/undeploy_manual_no_operator.sh --skip-pv
+  scripts/undeploy_manual_no_operator.sh --delete-namespace
   scripts/undeploy_manual_no_operator.sh --dry-run
 EOF
 }
@@ -51,8 +52,8 @@ while [ "$#" -gt 0 ]; do
       SKIP_PV="true"
       shift 1
       ;;
-    --skip-namespace)
-      SKIP_NAMESPACE="true"
+    --delete-namespace)
+      DELETE_NAMESPACE="true"
       shift 1
       ;;
     -h|--help)
@@ -96,7 +97,7 @@ echo "Namespace: $NAMESPACE"
 echo "kubectl cmd: $KC_CMD"
 echo "Dry run: $DRY_RUN"
 echo "Skip PV delete: $SKIP_PV"
-echo "Keep namespace: $SKIP_NAMESPACE"
+echo "Delete namespace: $DELETE_NAMESPACE"
 
 echo
 for manifest in "${MANIFESTS[@]}"; do
@@ -105,8 +106,8 @@ for manifest in "${MANIFESTS[@]}"; do
     continue
   fi
 
-  if [ "$manifest" = "k8s/namespace.yaml" ] && [ "$SKIP_NAMESPACE" = "true" ]; then
-    echo "==> Skipping $manifest (--skip-namespace)"
+  if [ "$manifest" = "k8s/namespace.yaml" ] && [ "$DELETE_NAMESPACE" != "true" ]; then
+    echo "==> Skipping $manifest (default behavior; use --delete-namespace to remove it)"
     continue
   fi
 
