@@ -4,7 +4,7 @@ set -euo pipefail
 # Restart common WLS-related workloads and wait for rollout
 # See -h/--help for usage.
 
-DEPLOYMENTS="wls-admin wls-dev"
+DEPLOYMENTS="wls-admin"
 STATEFULSETS="wls-managed-1 wls-managed-2 wls-managed-3"
 TIMEOUT="120s"
 

@@ -10,7 +10,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 NAMESPACE="wl"
 KC_CMD="${KC_CMD:-kubectl}"
 DRY_RUN="false"
-SKIP_PV="false"
+SKIP_PV="true"
 DELETE_NAMESPACE="false"
 
 usage() {
@@ -21,14 +21,15 @@ Options:
   -n, --namespace <ns>      Namespace (default: wl)
       --kc-cmd <cmd>        kubectl command (default: $KC_CMD or kubectl)
       --dry-run             Print delete commands, do not execute
-      --skip-pv             Do not delete cluster-scoped PV manifest (k8s/pv.yaml)
+      --delete-pv           Also delete cluster-scoped PV manifest (k8s/pv.yaml)
+                            (skipped by default – needs cluster-admin permissions)
       --delete-namespace    Also delete namespace object (uses --namespace value)
   -h, --help                Show help
 
 Examples:
   scripts/undeploy_manual_no_operator.sh
   scripts/undeploy_manual_no_operator.sh --kc-cmd "kubectl --context mycluster" -n wl
-  scripts/undeploy_manual_no_operator.sh --skip-pv
+  scripts/undeploy_manual_no_operator.sh --delete-pv
   scripts/undeploy_manual_no_operator.sh --delete-namespace
   scripts/undeploy_manual_no_operator.sh --dry-run
 EOF
@@ -48,8 +49,8 @@ while [ "$#" -gt 0 ]; do
       DRY_RUN="true"
       shift 1
       ;;
-    --skip-pv)
-      SKIP_PV="true"
+    --delete-pv)
+      SKIP_PV="false"
       shift 1
       ;;
     --delete-namespace)
@@ -95,13 +96,13 @@ echo "Repo root: $REPO_ROOT"
 echo "Namespace: $NAMESPACE"
 echo "kubectl cmd: $KC_CMD"
 echo "Dry run: $DRY_RUN"
-echo "Skip PV delete: $SKIP_PV"
+echo "Skip PV delete: $SKIP_PV (use --delete-pv to force deletion)"
 echo "Delete namespace: $DELETE_NAMESPACE"
 
 echo
 for manifest in "${MANIFESTS[@]}"; do
   if [ "$manifest" = "k8s/pv.yaml" ] && [ "$SKIP_PV" = "true" ]; then
-    echo "==> Skipping $manifest (--skip-pv)"
+    echo "==> Skipping $manifest (PV wird nicht gelöscht – bei Bedarf --delete-pv angeben)"
     continue
   fi
 
