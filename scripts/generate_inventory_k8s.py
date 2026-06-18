@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
 """
-Generate inventory.yaml from a real Kubernetes cluster (kubectl context).
+Generate inventory.yaml for Ansible kubectl-exec access to WLS pods.
+
+No SSH, no node access required.
+Ansible uses the kubernetes.core.kubectl connection plugin,
+which shells into pods via 'kubectl exec'.
 
 Usage examples:
-  ANSIBLE_SSH_KEY=~/.ssh/id_ed25519 ./scripts/generate_inventory_k8s.py
+  ./scripts/generate_inventory_k8s.py
   KC_CMD="kubectl --context prod-cluster" ./scripts/generate_inventory_k8s.py -n wl
+  ./scripts/generate_inventory_k8s.py --context prod-cluster --namespace wl
 
 Environment variables:
-  KC_CMD                 kubectl command (default: kubectl)
-  ANSIBLE_SSH_KEY        private key path (default: ~/.ssh/id_ed25519)
-  ANSIBLE_SSH_USER       SSH user for nodes/pods (default: docker)
-  ANSIBLE_NODEPORT_HOST  force ansible_host for weblogic_ssh entries
+  KC_CMD           kubectl command (default: kubectl)
+  WL_NAMESPACE     namespace (default: wl)
+  KC_CONTEXT       kubectl context (optional)
+  KUBECONFIG       kubeconfig path (optional)
 """
 
 from __future__ import annotations
@@ -22,24 +27,24 @@ import shlex
 import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUT_FILE = REPO_ROOT / "inventory.yaml"
-DEFAULT_KEY = str(Path.home() / ".ssh" / "id_ed25519")
 DEFAULT_KC_CMD = "kubectl"
 
-# Service-name -> inventory-host mapping
-NODEPORT_SERVICE_MAP = {
-    "wls-admin-ssh-nodeport": "wls-admin-node",
-    "wls-managed-1-ssh-nodeport": "wls-managed-1-node",
-    "wls-managed-2-ssh-nodeport": "wls-managed-2-node",
-}
+# (label-selector, inventory-host-name, container-name)
+WLS_POD_MAP: List[tuple] = [
+    ("app=wls-admin",     "wls-admin",     "wls-admin"),
+    ("app=wls-managed-1", "wls-managed-1", "wls-managed"),
+    ("app=wls-managed-2", "wls-managed-2", "wls-managed"),
+    ("app=wls-managed-3", "wls-managed-3", "wls-managed"),
+]
 
 
-def run_json(kc_cmd: str, args: List[str]) -> dict:
-    cmd = shlex.split(kc_cmd) + args + ["-o", "json"]
+def run_json(kc_args: List[str], extra: List[str]) -> dict:
+    cmd = kc_args + extra + ["-o", "json"]
     try:
         out = subprocess.check_output(cmd, stderr=subprocess.STDOUT, text=True)
         return json.loads(out)
@@ -47,124 +52,90 @@ def run_json(kc_cmd: str, args: List[str]) -> dict:
         print(f"Command failed: {' '.join(cmd)}\n{exc.output}", file=sys.stderr)
         raise
     except FileNotFoundError:
-        print(f"kubectl command not found: {kc_cmd}", file=sys.stderr)
+        print(f"kubectl binary not found: {cmd[0]}", file=sys.stderr)
         raise
 
 
-def pick_node_ip(status: dict) -> Optional[str]:
-    addresses = status.get("addresses", [])
-    preferred = ["InternalIP", "ExternalIP", "Hostname"]
-    by_type = {entry.get("type"): entry.get("address") for entry in addresses}
-    for addr_type in preferred:
-        ip = by_type.get(addr_type)
-        if ip:
-            return ip
-    return None
-
-
-def is_control_plane(labels: dict) -> bool:
-    return (
-        "node-role.kubernetes.io/control-plane" in labels
-        or "node-role.kubernetes.io/master" in labels
-    )
-
-
-def collect_nodes(nodes_obj: dict) -> Tuple[List[Tuple[str, str]], List[Tuple[str, str]]]:
-    control: List[Tuple[str, str]] = []
-    workers: List[Tuple[str, str]] = []
-
-    for item in nodes_obj.get("items", []):
-        meta = item.get("metadata", {})
-        status = item.get("status", {})
-        labels = meta.get("labels", {})
-
-        name = meta.get("name")
-        ip = pick_node_ip(status)
-        if not name or not ip:
-            continue
-
-        if is_control_plane(labels):
-            control.append((name, ip))
-        else:
-            workers.append((name, ip))
-
-    return control, workers
-
-
-def collect_nodeports(svc_obj: dict) -> Dict[str, int]:
-    ports: Dict[str, int] = {}
-    for item in svc_obj.get("items", []):
-        name = item.get("metadata", {}).get("name", "")
-        inv_host = NODEPORT_SERVICE_MAP.get(name)
-        if not inv_host:
-            continue
-
-        for port in item.get("spec", {}).get("ports", []):
-            node_port = port.get("nodePort")
-            if node_port:
-                ports[inv_host] = int(node_port)
-                break
-    return ports
-
-
-def write_group_hosts(fh, hosts: List[Tuple[str, str]], key_path: str, user: str) -> None:
-    if not hosts:
-        fh.write("        # no hosts detected\n")
-        return
-    for name, ip in hosts:
-        fh.write(f"        {name}:\n")
-        fh.write(f"          ansible_host: {ip}\n")
-        fh.write(f"          ansible_user: {user}\n")
-        fh.write(f"          ansible_ssh_private_key_file: {key_path}\n")
+def find_running_pod(kc_args: List[str], namespace: str, label_selector: str) -> Optional[str]:
+    """Return name of first Running pod matching the label selector, or None."""
+    cmd = kc_args + [
+        "get", "pods",
+        "-n", namespace,
+        "-l", label_selector,
+        "--field-selector=status.phase=Running",
+        "-o", "jsonpath={.items[0].metadata.name}",
+    ]
+    try:
+        out = subprocess.check_output(cmd, stderr=subprocess.DEVNULL, text=True).strip()
+        return out if out else None
+    except subprocess.CalledProcessError:
+        return None
 
 
 def write_inventory(
     out_file: Path,
-    key_path: str,
-    user: str,
-    control: List[Tuple[str, str]],
-    workers: List[Tuple[str, str]],
-    nodeport_host: str,
-    nodeports: Dict[str, int],
+    namespace: str,
+    kc_context: Optional[str],
+    kc_kubeconfig: Optional[str],
+    pods: List[tuple],  # (inv_name, container, pod_name_or_None)
 ) -> None:
     with out_file.open("w", encoding="utf-8") as fh:
+        fh.write("# Generated by scripts/generate_inventory_k8s.py\n")
+        fh.write("# Ansible access via kubectl exec (no SSH required).\n")
+        fh.write("# Requires: kubernetes.core collection.\n")
+        fh.write("#   ansible-galaxy collection install kubernetes.core\n\n")
         fh.write("all:\n")
         fh.write("  children:\n")
-
-        fh.write("    control:\n")
+        fh.write("    weblogic_pods:\n")
+        fh.write("      vars:\n")
+        fh.write("        ansible_connection: kubernetes.core.kubectl\n")
+        fh.write(f"        ansible_kubectl_namespace: {namespace}\n")
+        if kc_context:
+            fh.write(f"        ansible_kubectl_context: {kc_context}\n")
+        if kc_kubeconfig:
+            fh.write(f"        ansible_kubectl_kubeconfig: {kc_kubeconfig}\n")
         fh.write("      hosts:\n")
-        write_group_hosts(fh, control, key_path, user)
 
-        fh.write("    workers:\n")
-        fh.write("      hosts:\n")
-        write_group_hosts(fh, workers, key_path, user)
+        for inv_name, container, pod_name in pods:
+            fh.write(f"        {inv_name}:\n")
+            fh.write(f"          ansible_kubectl_container: {container}\n")
+            if pod_name:
+                fh.write(f"          ansible_kubectl_pod: {pod_name}\n")
+            else:
+                fh.write(f"          ansible_kubectl_pod: # pod not running – re-run after deploy\n")
 
-        fh.write("    weblogic_ssh:\n")
-        fh.write("      hosts:\n")
-        if not nodeports:
-            fh.write("        # no matching NodePort services found in namespace\n")
-        else:
-            for host in sorted(nodeports):
-                fh.write(f"        {host}:\n")
-                fh.write(f"          ansible_host: {nodeport_host}\n")
-                fh.write(f"          ansible_port: {nodeports[host]}\n")
-                fh.write(f"          ansible_user: {user}\n")
-                fh.write(f"          ansible_ssh_private_key_file: {key_path}\n")
-
-        fh.write("\n# You can add group_vars under group_vars/ directory or edit this file to add vars.\n")
+        fh.write("\n# Tip: re-run this script after pod restarts to refresh pod names.\n")
+        fh.write("# group_vars/weblogic_pods.yml can hold shared variables.\n")
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Generate Ansible inventory from Kubernetes")
-    parser.add_argument("-n", "--namespace", default="wl", help="namespace for NodePort services")
-    parser.add_argument("-o", "--out-file", default=str(DEFAULT_OUT_FILE), help="output inventory path")
-    parser.add_argument("--kc-cmd", default=os.environ.get("KC_CMD", DEFAULT_KC_CMD), help="kubectl command")
-    parser.add_argument("--ssh-key", default=os.environ.get("ANSIBLE_SSH_KEY", DEFAULT_KEY), help="ssh private key path")
-    parser.add_argument("--ssh-user", default=os.environ.get("ANSIBLE_SSH_USER", "docker"), help="ssh user")
+    parser = argparse.ArgumentParser(
+        description="Generate Ansible kubectl-exec inventory for WLS pods (no SSH)"
+    )
     parser.add_argument(
-        "--nodeport-host",
-        default=os.environ.get("ANSIBLE_NODEPORT_HOST"),
-        help="override ansible_host used for weblogic_ssh entries",
+        "-n", "--namespace",
+        default=os.environ.get("WL_NAMESPACE", "wl"),
+        help="Kubernetes namespace (default: wl)",
+    )
+    parser.add_argument(
+        "-o", "--out-file",
+        default=str(DEFAULT_OUT_FILE),
+        help="Output inventory path (default: <repo>/inventory.yaml)",
+    )
+    parser.add_argument(
+        "--kc-cmd",
+        default=os.environ.get("KC_CMD", DEFAULT_KC_CMD),
+        help="kubectl command (default: kubectl)",
+    )
+    parser.add_argument(
+        "--context",
+        default=os.environ.get("KC_CONTEXT"),
+        help="kubectl context (written into inventory vars; optional)",
+    )
+    parser.add_argument(
+        "--kubeconfig",
+        default=os.environ.get("KUBECONFIG"),
+        help="kubeconfig path (written into inventory vars; optional)",
     )
     return parser.parse_args()
 
@@ -172,44 +143,41 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     out_file = Path(args.out_file).expanduser().resolve()
-    key_path = str(Path(args.ssh_key).expanduser())
+    kc_args = shlex.split(args.kc_cmd)
 
-    print(f"Reading Kubernetes nodes via: {args.kc_cmd}")
-    nodes_obj = run_json(args.kc_cmd, ["get", "nodes"])
+    if args.context and "--context" not in args.kc_cmd:
+        kc_args += ["--context", args.context]
 
-    print(f"Reading services in namespace '{args.namespace}'")
-    svc_obj = run_json(args.kc_cmd, ["get", "svc", "-n", args.namespace])
+    print(f"Namespace : {args.namespace}")
+    print(f"kubectl   : {' '.join(kc_args)}")
+    print()
 
-    control, workers = collect_nodes(nodes_obj)
-    if not control and not workers:
-        print("No usable nodes found (missing node IPs).", file=sys.stderr)
+    # Verify cluster is reachable
+    try:
+        run_json(kc_args, ["get", "pods", "-n", args.namespace])
+    except Exception:
+        print("Could not reach cluster. Check your kubectl context.", file=sys.stderr)
         return 1
 
-    nodeports = collect_nodeports(svc_obj)
+    pods = []
+    for label_selector, inv_name, container in WLS_POD_MAP:
+        pod_name = find_running_pod(kc_args, args.namespace, label_selector)
+        status = pod_name if pod_name else "(not running)"
+        print(f"  {inv_name:<20} -> {status}")
+        pods.append((inv_name, container, pod_name))
 
-    default_nodeport_host = None
-    if control:
-        default_nodeport_host = control[0][1]
-    elif workers:
-        default_nodeport_host = workers[0][1]
-
-    nodeport_host = args.nodeport_host or default_nodeport_host
-    if not nodeport_host:
-        print("Could not determine nodeport host IP.", file=sys.stderr)
-        return 1
-
+    out_file.parent.mkdir(parents=True, exist_ok=True)
     write_inventory(
         out_file=out_file,
-        key_path=key_path,
-        user=args.ssh_user,
-        control=control,
-        workers=workers,
-        nodeport_host=nodeport_host,
-        nodeports=nodeports,
+        namespace=args.namespace,
+        kc_context=args.context,
+        kc_kubeconfig=args.kubeconfig,
+        pods=pods,
     )
 
-    print(f"Wrote inventory to {out_file}")
-    print(f"control={len(control)} workers={len(workers)} nodeport_services={len(nodeports)}")
+    print(f"\nWrote inventory to {out_file}")
+    running = sum(1 for _, _, p in pods if p)
+    print(f"Running pods: {running}/{len(pods)}")
     return 0
 
 

@@ -13,7 +13,7 @@ KC_CMD=${KC_CMD:-kubectl}
 
 LOAD_MINIKUBE="false"
 RESTART_WORKLOADS="false"
-SAVE_TAR=""
+SAVE_TAR="/tmp/${IMAGE_TAG}.tgz"
 
 usage() {
   cat <<EOF
