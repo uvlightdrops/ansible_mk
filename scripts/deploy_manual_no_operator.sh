@@ -10,6 +10,8 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 NAMESPACE="weblogic"
 KC_CMD="${KC_CMD:-kubectl}"
 DRY_RUN="false"
+SKIP_PV="false"
+PVC_STORAGE_CLASS=""
 
 usage() {
   cat <<'EOF'
@@ -19,11 +21,14 @@ Options:
   -n, --namespace <ns>      Namespace (default: weblogic)
       --kc-cmd <cmd>        kubectl command (default: $KC_CMD or kubectl)
       --dry-run             Use kubectl apply --dry-run=client
+      --skip-pv             Skip cluster-scoped PV manifest (k8s/pv.yaml)
+      --pvc-storage-class   Patch pvc-weblogic-home to use this StorageClass
   -h, --help                Show help
 
 Examples:
   scripts/deploy_manual_no_operator.sh
   scripts/deploy_manual_no_operator.sh -n weblogic --kc-cmd "kubectl --context mycluster"
+  scripts/deploy_manual_no_operator.sh --skip-pv --pvc-storage-class metro-nas
   scripts/deploy_manual_no_operator.sh --dry-run
 EOF
 }
@@ -41,6 +46,14 @@ while [ "$#" -gt 0 ]; do
     --dry-run)
       DRY_RUN="true"
       shift 1
+      ;;
+    --skip-pv)
+      SKIP_PV="true"
+      shift 1
+      ;;
+    --pvc-storage-class)
+      PVC_STORAGE_CLASS="$2"
+      shift 2
       ;;
     -h|--help)
       usage
@@ -82,14 +95,43 @@ echo "Repo root: $REPO_ROOT"
 echo "Namespace: $NAMESPACE"
 echo "kubectl cmd: $KC_CMD"
 echo "Dry run: $DRY_RUN"
+echo "Skip PV: $SKIP_PV"
+echo "PVC storageClass patch: ${PVC_STORAGE_CLASS:-<none>}"
 
 echo
 for manifest in "${MANIFESTS[@]}"; do
+  if [ "$manifest" = "k8s/pv.yaml" ] && [ "$SKIP_PV" = "true" ]; then
+    echo "==> Skipping $manifest (--skip-pv)"
+    continue
+  fi
+
   echo "==> Applying $manifest"
   if [ "$DRY_RUN" = "true" ]; then
     "${KC[@]}" apply --dry-run=client -f "$REPO_ROOT/$manifest" -n "$NAMESPACE"
   else
-    "${KC[@]}" apply -f "$REPO_ROOT/$manifest" -n "$NAMESPACE"
+    set +e
+    out=$("${KC[@]}" apply -f "$REPO_ROOT/$manifest" -n "$NAMESPACE" 2>&1)
+    rc=$?
+    set -e
+
+    if [ $rc -ne 0 ]; then
+      if [ "$manifest" = "k8s/pv.yaml" ] && echo "$out" | grep -qiE 'forbidden|cannot create resource|persistentvolumes'; then
+        echo "$out" >&2
+        echo "WARN: PV creation forbidden. Continuing without k8s/pv.yaml." >&2
+        echo "      If PVC stays Pending, set --pvc-storage-class <class> or ask platform team for storage." >&2
+        continue
+      fi
+      echo "$out" >&2
+      exit $rc
+    fi
+
+    echo "$out"
+
+    if [ "$manifest" = "k8s/pvc-weblogic-home.yaml" ] && [ -n "$PVC_STORAGE_CLASS" ]; then
+      echo "==> Patching pvc-weblogic-home storageClassName=$PVC_STORAGE_CLASS"
+      "${KC[@]}" patch pvc pvc-weblogic-home -n "$NAMESPACE" --type merge \
+        -p "{\"spec\":{\"storageClassName\":\"$PVC_STORAGE_CLASS\"}}"
+    fi
   fi
 done
 

@@ -27,6 +27,20 @@ cd /home/flow/dev_mk/ansible_mk
 scripts/deploy_manual_no_operator.sh
 ```
 
+Wenn dein User **keine Rechte fuer cluster-scoped PersistentVolumes** hat:
+
+```bash
+cd /home/flow/dev_mk/ansible_mk
+scripts/deploy_manual_no_operator.sh --skip-pv
+```
+
+Wenn der PVC danach `Pending` bleibt, setze explizit eine erlaubte StorageClass:
+
+```bash
+cd /home/flow/dev_mk/ansible_mk
+scripts/deploy_manual_no_operator.sh --skip-pv --pvc-storage-class metro-nas
+```
+
 Mit explizitem Cluster-Context:
 
 ```bash
