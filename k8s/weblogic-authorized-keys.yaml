@@ -5,4 +5,3 @@ data:
 kind: ConfigMap
 metadata:
   name: weblogic-authorized-keys
-  namespace: weblogic

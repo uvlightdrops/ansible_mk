@@ -7,11 +7,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-NAMESPACE="weblogic"
+NAMESPACE="wl"
 KC_CMD="${KC_CMD:-kubectl}"
 DRY_RUN="false"
 CREATE_NAMESPACE="false"
 APPLY_PV="false"
+SKIP_PVC="false"
 PVC_STORAGE_CLASS=""
 
 usage() {
@@ -19,18 +20,20 @@ usage() {
 Usage: scripts/deploy_manual_no_operator.sh [options]
 
 Options:
-  -n, --namespace <ns>      Namespace (default: weblogic)
+  -n, --namespace <ns>      Namespace (default: wl)
       --kc-cmd <cmd>        kubectl command (default: $KC_CMD or kubectl)
       --dry-run             Use kubectl apply --dry-run=client
-      --create-namespace    Also apply namespace manifest (k8s/namespace.yaml)
+      --create-namespace    Create namespace if missing (uses --namespace value)
       --with-pv             Also apply cluster-scoped PV manifest (k8s/pv.yaml)
+      --skip-pvc            Skip namespace-scoped PVC manifest (k8s/pvc-weblogic-home.yaml)
       --pvc-storage-class   Patch pvc-weblogic-home to use this StorageClass
   -h, --help                Show help
 
 Examples:
   scripts/deploy_manual_no_operator.sh
-  scripts/deploy_manual_no_operator.sh -n weblogic --kc-cmd "kubectl --context mycluster"
+  scripts/deploy_manual_no_operator.sh -n wl --kc-cmd "kubectl --context mycluster"
   scripts/deploy_manual_no_operator.sh --with-pv
+  scripts/deploy_manual_no_operator.sh --skip-pvc
   scripts/deploy_manual_no_operator.sh --create-namespace --with-pv --pvc-storage-class metro-nas
   scripts/deploy_manual_no_operator.sh --dry-run
 EOF
@@ -58,6 +61,10 @@ while [ "$#" -gt 0 ]; do
       APPLY_PV="true"
       shift 1
       ;;
+    --skip-pvc)
+      SKIP_PVC="true"
+      shift 1
+      ;;
     --pvc-storage-class)
       PVC_STORAGE_CLASS="$2"
       shift 2
@@ -77,7 +84,6 @@ done
 read -r -a KC <<<"$KC_CMD"
 
 MANIFESTS=(
-  "k8s/namespace.yaml"
   "k8s/pv.yaml"
   "k8s/pvc-weblogic-home.yaml"
   "k8s/gen-ssh-keys-config.yaml"
@@ -98,23 +104,34 @@ for manifest in "${MANIFESTS[@]}"; do
   fi
 done
 
+if [ "$CREATE_NAMESPACE" = "true" ]; then
+  echo "==> Ensuring namespace exists: $NAMESPACE"
+  if [ "$DRY_RUN" = "true" ]; then
+    echo "[dry-run] ${KC_CMD} get namespace $NAMESPACE || ${KC_CMD} create namespace $NAMESPACE"
+  else
+    "${KC[@]}" get namespace "$NAMESPACE" >/dev/null 2>&1 || "${KC[@]}" create namespace "$NAMESPACE"
+  fi
+fi
+
 echo "Repo root: $REPO_ROOT"
 echo "Namespace: $NAMESPACE"
 echo "kubectl cmd: $KC_CMD"
 echo "Dry run: $DRY_RUN"
 echo "Create namespace: $CREATE_NAMESPACE"
 echo "Apply PV: $APPLY_PV"
+echo "Skip PVC: $SKIP_PVC"
 echo "PVC storageClass patch: ${PVC_STORAGE_CLASS:-<none>}"
 
 echo
 for manifest in "${MANIFESTS[@]}"; do
-  if [ "$manifest" = "k8s/namespace.yaml" ] && [ "$CREATE_NAMESPACE" != "true" ]; then
-    echo "==> Skipping $manifest (default behavior; use --create-namespace to apply it)"
-    continue
-  fi
 
   if [ "$manifest" = "k8s/pv.yaml" ] && [ "$APPLY_PV" != "true" ]; then
     echo "==> Skipping $manifest (default behavior; use --with-pv to apply it)"
+    continue
+  fi
+
+  if [ "$manifest" = "k8s/pvc-weblogic-home.yaml" ] && [ "$SKIP_PVC" = "true" ]; then
+    echo "==> Skipping $manifest (--skip-pvc)"
     continue
   fi
 

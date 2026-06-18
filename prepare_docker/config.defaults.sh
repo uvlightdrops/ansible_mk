@@ -3,7 +3,7 @@
 # Central defaults for prepare_docker shell scripts.
 # Override via environment variables or by creating prepare_docker/config.local.sh.
 
-NAMESPACE_DEFAULT="weblogic"
+NAMESPACE_DEFAULT="wl"
 KC_CMD_DEFAULT="kc"
 
 MK_PRF_DEFAULT="wlcluster"

@@ -7,7 +7,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-NAMESPACE="weblogic"
+NAMESPACE="wl"
 KC_CMD="${KC_CMD:-kubectl}"
 DRY_RUN="false"
 SKIP_PV="false"
@@ -18,16 +18,16 @@ usage() {
 Usage: scripts/undeploy_manual_no_operator.sh [options]
 
 Options:
-  -n, --namespace <ns>      Namespace (default: weblogic)
+  -n, --namespace <ns>      Namespace (default: wl)
       --kc-cmd <cmd>        kubectl command (default: $KC_CMD or kubectl)
       --dry-run             Print delete commands, do not execute
       --skip-pv             Do not delete cluster-scoped PV manifest (k8s/pv.yaml)
-      --delete-namespace    Also delete namespace object (k8s/namespace.yaml)
+      --delete-namespace    Also delete namespace object (uses --namespace value)
   -h, --help                Show help
 
 Examples:
   scripts/undeploy_manual_no_operator.sh
-  scripts/undeploy_manual_no_operator.sh --kc-cmd "kubectl --context mycluster"
+  scripts/undeploy_manual_no_operator.sh --kc-cmd "kubectl --context mycluster" -n wl
   scripts/undeploy_manual_no_operator.sh --skip-pv
   scripts/undeploy_manual_no_operator.sh --delete-namespace
   scripts/undeploy_manual_no_operator.sh --dry-run
@@ -82,7 +82,6 @@ MANIFESTS=(
   "k8s/gen-ssh-keys-config.yaml"
   "k8s/pvc-weblogic-home.yaml"
   "k8s/pv.yaml"
-  "k8s/namespace.yaml"
 )
 
 for manifest in "${MANIFESTS[@]}"; do
@@ -106,11 +105,6 @@ for manifest in "${MANIFESTS[@]}"; do
     continue
   fi
 
-  if [ "$manifest" = "k8s/namespace.yaml" ] && [ "$DELETE_NAMESPACE" != "true" ]; then
-    echo "==> Skipping $manifest (default behavior; use --delete-namespace to remove it)"
-    continue
-  fi
-
   if [ "$DRY_RUN" = "true" ]; then
     echo "[dry-run] ${KC_CMD} delete -f $REPO_ROOT/$manifest -n $NAMESPACE --ignore-not-found=true"
     continue
@@ -128,17 +122,35 @@ for manifest in "${MANIFESTS[@]}"; do
       echo "WARN: No permission to delete PV. Continuing." >&2
       continue
     fi
-    if [ "$manifest" = "k8s/namespace.yaml" ] && echo "$out" | grep -qiE 'forbidden|cannot delete resource|namespaces'; then
-      echo "$out" >&2
-      echo "WARN: No permission to delete namespace. Continuing." >&2
-      continue
-    fi
     echo "$out" >&2
     exit $rc
   fi
 
   echo "$out"
 done
+
+if [ "$DELETE_NAMESPACE" = "true" ]; then
+  echo "==> Deleting namespace $NAMESPACE"
+  if [ "$DRY_RUN" = "true" ]; then
+    echo "[dry-run] ${KC_CMD} delete namespace $NAMESPACE --ignore-not-found=true"
+  else
+    set +e
+    out=$("${KC[@]}" delete namespace "$NAMESPACE" --ignore-not-found=true 2>&1)
+    rc=$?
+    set -e
+    if [ $rc -ne 0 ]; then
+      if echo "$out" | grep -qiE 'forbidden|cannot delete resource|namespaces'; then
+        echo "$out" >&2
+        echo "WARN: No permission to delete namespace. Continuing." >&2
+      else
+        echo "$out" >&2
+        exit $rc
+      fi
+    else
+      echo "$out"
+    fi
+  fi
+fi
 
 echo
 echo "Undeploy complete. Current status:"

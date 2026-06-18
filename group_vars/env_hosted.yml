@@ -5,7 +5,7 @@
 # DO NOT store secrets here - use Ansible Vault or external secret management!
 # For testing only, override with: ansible-playbook deploy_weblogic.yml -e weblogic_admin_password=...
 #
-namespace: weblogic
+namespace: wl
 kustomize_overlay: k8s/overlays/hosted
 
 # ======== Hosted-specific deployment flags ========

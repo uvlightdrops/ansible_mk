@@ -1,6 +1,6 @@
 ---
 # Global vars for weblogic deployment
-namespace: weblogic
+namespace: wl
 
 # Domain identity
 domain_uid: sample-domain1

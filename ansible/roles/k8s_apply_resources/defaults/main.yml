@@ -1,6 +1,6 @@
 ---
 k8s_kubectl_cmd: "{{ lookup('env', 'KC_CMD') | default('kubectl', true) }}"
-k8s_namespace: weblogic
+k8s_namespace: "{{ namespace }}"
 k8s_apply_style: files   # files | kustomize
 k8s_apply_files: []
 k8s_kustomize_dir: ""

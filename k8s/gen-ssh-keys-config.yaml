@@ -57,4 +57,3 @@ data:
 kind: ConfigMap
 metadata:
   name: gen-ssh-keys-script
-  namespace: weblogic

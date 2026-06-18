@@ -56,7 +56,7 @@ Beispiel:
   roles:
     - role: k8s_pod_exec
       vars:
-        k8s_namespace: weblogic
+        k8s_namespace: wl
         k8s_pod_selector: app=wls-admin
         k8s_exec_command:
           - /bin/sh

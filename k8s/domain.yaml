@@ -4,7 +4,6 @@ apiVersion: weblogic.oracle/v8
 kind: Domain
 metadata:
   name: sample-domain1
-  namespace: weblogic
 spec:
   domainUID: sample-domain1
   image: "REPLACE_WITH_YOUR_WLS_IMAGE"

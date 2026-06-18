@@ -64,7 +64,7 @@
       when: apply_operator_effective | bool
 
     - name: Apply selected Kustomize overlay
-      command: kubectl apply -k "{{ kustomize_overlay }}"
+      command: kubectl apply -n "{{ namespace }}" -k "{{ kustomize_overlay }}"
       args:
         chdir: "{{ repo_root }}"
       register: apply_overlay

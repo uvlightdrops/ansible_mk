@@ -74,8 +74,8 @@ ansible-playbook k8s_weblogic/deploy_weblogic.yml -e @group_vars/env_hosted.yml
 6) Prüfen:
 
 ```bash
-minikube -p wlcluster kubectl -- get pods -n weblogic -o wide
-minikube -p wlcluster kubectl -- get domains -n weblogic
+minikube -p wlcluster kubectl -- get pods -n wl -o wide
+minikube -p wlcluster kubectl -- get domains -n wl
 ```
 
 Hinweise
@@ -91,7 +91,7 @@ Troubleshooting
 ---------------
 - Operator nicht startend: `kubectl logs -n weblogic <operator-pod>`
 - Domain CR nicht erkannt: sicherstellen, dass CRDs des Operators installiert sind (im Operator‑Manifest)
-- PV/PVC Probleme: `kubectl describe pvc pvc-weblogic-home -n weblogic` und Node Pfad prüfen
+- PV/PVC Probleme: `kubectl describe pvc pvc-weblogic-home -n wl` und Node Pfad prüfen
 
 Wichtige Hinweise zu SSH/InitScript
 ----------------------------------
@@ -99,17 +99,17 @@ Wichtige Hinweise zu SSH/InitScript
   Um die ConfigMap zu (re)generieren, nutze:
 
 ```bash
-kubectl create configmap gen-ssh-keys-script --from-file=prepare_docker/gen-ssh-keys.sh -n weblogic --dry-run=client -o yaml > k8s/gen-ssh-keys-config.yaml
+kubectl create configmap gen-ssh-keys-script --from-file=prepare_docker/gen-ssh-keys.sh -n wl --dry-run=client -o yaml > k8s/gen-ssh-keys-config.yaml
 kc apply -f k8s/gen-ssh-keys-config.yaml
 ```
 
 - Nach Änderung des Scripts musst du die betroffenen Workloads neu starten, damit InitContainers wiederlaufen:
 
 ```bash
-kc rollout restart deployment/wls-admin -n weblogic
-kc rollout restart statefulset/wls-managed-1 -n weblogic
-kc rollout restart statefulset/wls-managed-2 -n weblogic
-kc rollout restart statefulset/wls-managed-3 -n weblogic
+kc rollout restart deployment/wls-admin -n wl
+kc rollout restart statefulset/wls-managed-1 -n wl
+kc rollout restart statefulset/wls-managed-2 -n wl
+kc rollout restart statefulset/wls-managed-3 -n wl
 ```
 
 Hilfs‑Skripte

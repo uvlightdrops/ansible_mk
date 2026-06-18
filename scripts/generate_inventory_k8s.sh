@@ -4,9 +4,9 @@ set -euo pipefail
 # Generate inventory.yaml from a real Kubernetes cluster (current kubectl context).
 # Usage examples:
 #   ANSIBLE_SSH_KEY=~/.ssh/id_ed25519 ./scripts/generate_inventory_k8s.sh
-#   KC_CMD="kubectl --context prod" ./scripts/generate_inventory_k8s.sh -n weblogic
+#   KC_CMD="kubectl --context prod" ./scripts/generate_inventory_k8s.sh -n wl
 
-NAMESPACE="weblogic"
+NAMESPACE="wl"
 OUT_FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/inventory.yaml"
 KC_CMD="${KC_CMD:-kubectl}"
 KEY_PATH="${ANSIBLE_SSH_KEY:-${HOME}/.ssh/id_ed25519}"
@@ -18,7 +18,7 @@ usage() {
 Usage: scripts/generate_inventory_k8s.sh [options]
 
 Options:
-  -n, --namespace <ns>       Namespace for NodePort services (default: weblogic)
+  -n, --namespace <ns>       Namespace for NodePort services (default: wl)
   -o, --out-file <path>      Output file (default: <repo>/inventory.yaml)
       --kc-cmd <cmd>         kubectl command (default: $KC_CMD or kubectl)
       --ssh-key <path>       SSH private key path (default: ~/.ssh/id_ed25519)

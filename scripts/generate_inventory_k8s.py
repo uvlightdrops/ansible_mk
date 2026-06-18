@@ -4,7 +4,7 @@ Generate inventory.yaml from a real Kubernetes cluster (kubectl context).
 
 Usage examples:
   ANSIBLE_SSH_KEY=~/.ssh/id_ed25519 ./scripts/generate_inventory_k8s.py
-  KC_CMD="kubectl --context prod-cluster" ./scripts/generate_inventory_k8s.py -n weblogic
+  KC_CMD="kubectl --context prod-cluster" ./scripts/generate_inventory_k8s.py -n wl
 
 Environment variables:
   KC_CMD                 kubectl command (default: kubectl)
@@ -156,7 +156,7 @@ def write_inventory(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate Ansible inventory from Kubernetes")
-    parser.add_argument("-n", "--namespace", default="weblogic", help="namespace for NodePort services")
+    parser.add_argument("-n", "--namespace", default="wl", help="namespace for NodePort services")
     parser.add_argument("-o", "--out-file", default=str(DEFAULT_OUT_FILE), help="output inventory path")
     parser.add_argument("--kc-cmd", default=os.environ.get("KC_CMD", DEFAULT_KC_CMD), help="kubectl command")
     parser.add_argument("--ssh-key", default=os.environ.get("ANSIBLE_SSH_KEY", DEFAULT_KEY), help="ssh private key path")

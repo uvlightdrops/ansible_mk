@@ -33,6 +33,14 @@ scripts/deploy_manual_no_operator.sh
 Hinweis: Standardmaessig werden `k8s/namespace.yaml` und `k8s/pv.yaml` dabei **nicht** angewendet.
 Damit ist der Default fuer eingeschraenkte Cluster-RBAC geeignet.
 
+Wenn dein User im Namespace keine PVC-Rechte hat (`kubectl auth can-i get/create pvc -n wl` = `no`),
+kannst du den PVC-Schritt ebenfalls auslassen:
+
+```bash
+cd /home/flow/dev_mk/ansible_mk
+scripts/deploy_manual_no_operator.sh --skip-pvc
+```
+
 Wenn du Namespace und PV explizit mit anlegen willst:
 
 ```bash
@@ -46,6 +54,8 @@ Wenn der PVC danach `Pending` bleibt, setze explizit eine erlaubte StorageClass:
 cd /home/flow/dev_mk/ansible_mk
 scripts/deploy_manual_no_operator.sh --pvc-storage-class metro-nas
 ```
+
+Hinweis: `--pvc-storage-class` setzt voraus, dass du den PVC patchen darfst.
 
 Mit explizitem Cluster-Context:
 
@@ -67,25 +77,25 @@ Projekt-Skript (nutzt den bestehenden `prepare_docker`-Flow):
 
 ```bash
 cd /home/flow/dev_mk/ansible_mk
-prepare_docker/pd/restart_wls_rollouts.sh -n weblogic -k "kubectl --context <dein-context>"
+prepare_docker/pd/restart_wls_rollouts.sh -n wl -k "kubectl --context <dein-context>"
 ```
 
 Oder direkt mit `kubectl`:
 
 ```bash
-kubectl rollout restart deployment/wls-admin -n weblogic
-kubectl rollout restart statefulset/wls-managed-1 -n weblogic
-kubectl rollout restart statefulset/wls-managed-2 -n weblogic
-kubectl rollout restart statefulset/wls-managed-3 -n weblogic
+kubectl rollout restart deployment/wls-admin -n wl
+kubectl rollout restart statefulset/wls-managed-1 -n wl
+kubectl rollout restart statefulset/wls-managed-2 -n wl
+kubectl rollout restart statefulset/wls-managed-3 -n wl
 ```
 
 Status beobachten:
 
 ```bash
-kubectl rollout status deployment/wls-admin -n weblogic
-kubectl rollout status statefulset/wls-managed-1 -n weblogic
-kubectl rollout status statefulset/wls-managed-2 -n weblogic
-kubectl rollout status statefulset/wls-managed-3 -n weblogic
+kubectl rollout status deployment/wls-admin -n wl
+kubectl rollout status statefulset/wls-managed-1 -n wl
+kubectl rollout status statefulset/wls-managed-2 -n wl
+kubectl rollout status statefulset/wls-managed-3 -n wl
 ```
 
 ## Undeploy (manueller Pfad)
@@ -97,7 +107,7 @@ cd /home/flow/dev_mk/ansible_mk
 scripts/undeploy_manual_no_operator.sh --kc-cmd "kubectl --context <dein-context>"
 ```
 
-Hinweis: Das Namespace-Objekt `weblogic` bleibt dabei standardmaessig erhalten.
+Hinweis: Das Namespace-Objekt `wl` bleibt dabei standardmaessig erhalten.
 
 Wenn du keine Rechte auf PV-Loeschung hast:
 
@@ -145,26 +155,28 @@ kubectl apply -f k8s/overlays/manual/deploy-wls-managed-2.yaml
 kubectl apply -f k8s/overlays/manual/deploy-wls-managed-3.yaml
 ```
 
+Wenn der Namespace bereits existiert (z. B. per Rancher/Projektverwaltung), kannst du `k8s/namespace.yaml` weglassen.
+
 ## Status pruefen
 
 ```bash
-kubectl get pods -n weblogic -o wide
-kubectl get svc -n weblogic
-kubectl get pvc -n weblogic
+kubectl get pods -n wl -o wide
+kubectl get svc -n wl
+kubectl get pvc -n wl
 ```
 
 Live-Watch:
 
 ```bash
-kubectl get pods -n weblogic -w
+kubectl get pods -n wl -w
 ```
 
 ## Schnell-Diagnose bei Problemen
 
 ```bash
-kubectl describe pod -n weblogic <pod-name>
-kubectl logs -n weblogic <pod-name> --all-containers=true --tail=200
-kubectl describe pvc -n weblogic pvc-weblogic-home
+kubectl describe pod -n wl <pod-name>
+kubectl logs -n wl <pod-name> --all-containers=true --tail=200
+kubectl describe pvc -n wl pvc-weblogic-home
 ```
 
 ## Hinweis zu bestehenden Automationspfaden
