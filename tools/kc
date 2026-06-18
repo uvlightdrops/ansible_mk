@@ -6,7 +6,12 @@ set -euo pipefail
 # appends `-n $WL_NS` so your scripts behave like your interactive alias.
 
 MK_PRF="${MK_PRF:-wlcluster}"
-WL_NS="${WL_NS:-weblogic}"
+WL_NS="${WL_NS:-${NAMESPACE:-wl}}"
+
+use_minikube=0
+if command -v minikube >/dev/null 2>&1; then
+  use_minikube=1
+fi
 
 # If tools/kc is used from repo root, ensure we exec minikube from PATH; nothing else to do
 
@@ -25,10 +30,18 @@ for arg in "$@"; do
   esac
 done
 
-if [ "$has_ns" -eq 1 ]; then
-  exec minikube -p "$MK_PRF" kubectl -- "$@"
+if [ "$use_minikube" -eq 1 ]; then
+  if [ "$has_ns" -eq 1 ]; then
+    exec minikube -p "$MK_PRF" kubectl -- "$@"
+  else
+    # inject default namespace before other args
+    exec minikube -p "$MK_PRF" kubectl -- -n "$WL_NS" "$@"
+  fi
 else
-  # inject default namespace before other args
-  exec minikube -p "$MK_PRF" kubectl -- -n "$WL_NS" "$@"
+  if [ "$has_ns" -eq 1 ]; then
+    exec kubectl "$@"
+  else
+    exec kubectl -n "$WL_NS" "$@"
+  fi
 fi
 
