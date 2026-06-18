@@ -92,6 +92,15 @@
 
 ---
 
+### 9. **[ANSIBLE_ROLES.md](ANSIBLE_ROLES.md)** - Rollen für VM- und Kubernetes-Targets
+- 🧩 `weblogic_classic_install` für SSH/VMs
+- 🧩 `k8s_apply_resources` für lokale Kubernetes-Applies
+- 🧩 `k8s_pod_exec` als Alternative zu SSH in Pods
+
+**Zielgruppe:** Wer den Ansible-Ansatz in Rollen übersetzen will.
+
+---
+
 ## 🛠️ Hilfsskripte
 
 Alle im `scripts/`-Verzeichnis.

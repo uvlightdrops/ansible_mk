@@ -3,6 +3,9 @@
 Dieses Runbook ist fuer den Fall gedacht, dass der WebLogic Operator nicht genutzt werden kann.
 Es deployt die Workloads direkt als Deployments/Services.
 
+Die manuellen Pod-Deployments liegen unter `k8s/overlays/manual/` und enthalten
+einen restriktiven `securityContext` (`runAsUser`, `runAsNonRoot`, `allowPrivilegeEscalation: false`, `capabilities.drop: ["ALL"]`).
+
 ## Kurz erklaert: Overlays und Kustomization
 
 - `k8s/overlays/*` sind Umgebungsvarianten (`minikube`, `hosted`, `manual`).
@@ -74,10 +77,10 @@ kubectl apply -f k8s/weblogic-authorized-keys.yaml
 kubectl apply -f k8s/services-clusterip.yaml
 kubectl apply -f k8s/services-nodeports.yaml
 kubectl apply -f k8s/deploy-test-db.yaml
-kubectl apply -f k8s/deploy-wls-admin.yaml
-kubectl apply -f k8s/deploy-wls-managed-1.yaml
-kubectl apply -f k8s/deploy-wls-managed-2.yaml
-kubectl apply -f k8s/deploy-wls-managed-3.yaml
+kubectl apply -f k8s/overlays/manual/deploy-wls-admin.yaml
+kubectl apply -f k8s/overlays/manual/deploy-wls-managed-1.yaml
+kubectl apply -f k8s/overlays/manual/deploy-wls-managed-2.yaml
+kubectl apply -f k8s/overlays/manual/deploy-wls-managed-3.yaml
 ```
 
 ## Status pruefen

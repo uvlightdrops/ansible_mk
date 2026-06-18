@@ -1,0 +1,33 @@
+---
+- name: Find target pod by selector
+  command:
+    argv: >-
+      {{ k8s_kubectl_cmd.split() + ['-n', k8s_namespace, 'get', 'pod', '-l', k8s_pod_selector,
+      '-o', "jsonpath={.items[0].metadata.name}"] }}
+  register: pod_name_result
+  changed_when: false
+
+- name: Fail when no pod was found
+  fail:
+    msg: "No pod found for selector '{{ k8s_pod_selector }}' in namespace '{{ k8s_namespace }}'."
+  when: pod_name_result.stdout | trim == ''
+
+- name: Execute command in target pod
+  set_fact:
+    k8s_pod_exec_argv: >-
+      {{ [k8s_kubectl_cmd, '-n', k8s_namespace, 'exec', pod_name_result.stdout | trim]
+         + (['-c', k8s_pod_container] if (k8s_pod_container | length > 0) else [])
+         + ['--'] + k8s_exec_command }}
+
+- name: Run command in target pod
+  command:
+    argv: "{{ k8s_pod_exec_argv }}"
+  register: pod_exec_result
+  changed_when: false
+
+- name: Show command output
+  debug:
+    var: pod_exec_result.stdout_lines
+
+
+

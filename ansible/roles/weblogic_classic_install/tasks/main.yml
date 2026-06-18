@@ -1,0 +1,61 @@
+---
+- name: Ensure classic install variables are present
+  assert:
+    that:
+      - weblogic_installer_src is defined
+      - weblogic_installer_src | length > 0
+    fail_msg: "Set weblogic_installer_src to the local path of the WebLogic installer jar/bin."
+
+- name: Ensure Java is installed (Debian/RedHat)
+  package:
+    name: "{{ java_package_apt if ansible_facts['os_family'] == 'Debian' else java_package_yum }}"
+    state: present
+
+- name: Create weblogic base directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ weblogic_user }}"
+    group: "{{ weblogic_group }}"
+    mode: '0755'
+  loop:
+    - "{{ weblogic_home }}"
+    - "{{ domain_home }}"
+    - "{{ domain_home }}/{{ domain_name_local }}"
+    - "{{ installer_dest }}"
+
+- name: Upload WebLogic installer to target
+  copy:
+    src: "{{ weblogic_installer_src }}"
+    dest: "{{ installer_dest }}/{{ weblogic_installer_filename }}"
+    mode: '0755'
+
+- name: Render response file for silent install
+  template:
+    src: "{{ response_template }}"
+    dest: "{{ installer_dest }}/response.rsp"
+    owner: "{{ weblogic_user }}"
+    group: "{{ weblogic_group }}"
+    mode: '0644'
+
+- name: Run WebLogic installer (silent) as weblogic user
+  become: yes
+  become_user: "{{ weblogic_user }}"
+  shell: |
+    cd {{ installer_dest }} && \
+    java -jar {{ weblogic_installer_filename }} -silent -responseFile response.rsp || true
+  args:
+    chdir: "{{ installer_dest }}"
+  register: install_result
+
+- name: Show installer output
+  debug:
+    var: install_result.stdout_lines
+
+- name: Create domain directory marker
+  file:
+    path: "{{ domain_home }}/{{ domain_name_local }}/.weblogic_installed"
+    state: touch
+    owner: "{{ weblogic_user }}"
+    mode: '0644'
+

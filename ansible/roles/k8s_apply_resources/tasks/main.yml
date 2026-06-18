@@ -1,0 +1,31 @@
+---
+- name: Ensure k8s apply style is valid
+  assert:
+    that:
+      - k8s_apply_style in ['files', 'kustomize']
+    fail_msg: "k8s_apply_style must be 'files' or 'kustomize'."
+
+- name: Split kubectl command into argv list
+  set_fact:
+    k8s_kubectl_argv: "{{ k8s_kubectl_cmd.split() }}"
+
+- name: Apply raw manifest files
+  command:
+    argv: "{{ k8s_kubectl_argv + ['apply', '-f', item] }}"
+  args:
+    chdir: "{{ playbook_dir | dirname }}"
+  loop: "{{ k8s_apply_files }}"
+  when: k8s_apply_style == 'files'
+  register: apply_files_result
+
+- name: Apply kustomize overlay
+  command:
+    argv: "{{ k8s_kubectl_argv + ['apply', '-k', k8s_kustomize_dir] }}"
+  args:
+    chdir: "{{ playbook_dir | dirname }}"
+  when: k8s_apply_style == 'kustomize'
+  register: apply_kustomize_result
+
+
+
+

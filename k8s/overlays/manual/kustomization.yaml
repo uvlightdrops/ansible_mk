@@ -10,10 +10,10 @@ resources:
   - ../../services-clusterip.yaml
   - ../../services-nodeports.yaml
   - ../../deploy-test-db.yaml
-  - ../../deploy-wls-admin.yaml
-  - ../../deploy-wls-managed-1.yaml
-  - ../../deploy-wls-managed-2.yaml
-  - ../../deploy-wls-managed-3.yaml
+  - deploy-wls-admin.yaml
+  - deploy-wls-managed-1.yaml
+  - deploy-wls-managed-2.yaml
+  - deploy-wls-managed-3.yaml
 patches:
   - path: patch-pvc-storageclass.yaml
 

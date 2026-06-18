@@ -1,0 +1,10 @@
+---
+weblogic_user: "{{ serviceuser | default('docker') }}"
+weblogic_group: "{{ servicegroup | default(weblogic_user) }}"
+weblogic_home: "{{ wls_location | default('/u01/oracle') }}"
+domain_home: "{{ domain_location | default('/u01/domains') }}"
+domain_name_local: "{{ DOMAIN_NAME | default(domain_name | default('sample-domain1')) }}"
+installer_dest: "{{ installer_workdir | default('/tmp/weblogic_installer') }}"
+weblogic_installer_filename: "{{ weblogic_installer_src | basename }}"
+response_template: "{{ weblogic_response_template | default('templates/response.rsp.j2') }}"
+

@@ -78,10 +78,10 @@ MANIFESTS=(
   "k8s/services-clusterip.yaml"
   "k8s/services-nodeports.yaml"
   "k8s/deploy-test-db.yaml"
-  "k8s/deploy-wls-admin.yaml"
-  "k8s/deploy-wls-managed-1.yaml"
-  "k8s/deploy-wls-managed-2.yaml"
-  "k8s/deploy-wls-managed-3.yaml"
+  "k8s/overlays/manual/deploy-wls-admin.yaml"
+  "k8s/overlays/manual/deploy-wls-managed-1.yaml"
+  "k8s/overlays/manual/deploy-wls-managed-2.yaml"
+  "k8s/overlays/manual/deploy-wls-managed-3.yaml"
 )
 
 for manifest in "${MANIFESTS[@]}"; do
