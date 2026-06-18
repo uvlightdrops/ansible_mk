@@ -58,6 +58,56 @@ cd /home/flow/dev_mk/ansible_mk
 scripts/deploy_manual_no_operator.sh --dry-run
 ```
 
+## Rollout Restart (Pods neu starten ohne Re-Apply)
+
+Projekt-Skript (nutzt den bestehenden `prepare_docker`-Flow):
+
+```bash
+cd /home/flow/dev_mk/ansible_mk
+prepare_docker/pd/restart_wls_rollouts.sh -n weblogic -k "kubectl --context <dein-context>"
+```
+
+Oder direkt mit `kubectl`:
+
+```bash
+kubectl rollout restart deployment/wls-admin -n weblogic
+kubectl rollout restart statefulset/wls-managed-1 -n weblogic
+kubectl rollout restart statefulset/wls-managed-2 -n weblogic
+kubectl rollout restart statefulset/wls-managed-3 -n weblogic
+```
+
+Status beobachten:
+
+```bash
+kubectl rollout status deployment/wls-admin -n weblogic
+kubectl rollout status statefulset/wls-managed-1 -n weblogic
+kubectl rollout status statefulset/wls-managed-2 -n weblogic
+kubectl rollout status statefulset/wls-managed-3 -n weblogic
+```
+
+## Undeploy (manueller Pfad)
+
+Alle manuell deployten Ressourcen wieder entfernen:
+
+```bash
+cd /home/flow/dev_mk/ansible_mk
+scripts/undeploy_manual_no_operator.sh --kc-cmd "kubectl --context <dein-context>"
+```
+
+Wenn du keine Rechte auf PV/Namespace-Loeschung hast:
+
+```bash
+cd /home/flow/dev_mk/ansible_mk
+scripts/undeploy_manual_no_operator.sh --skip-pv --skip-namespace --kc-cmd "kubectl --context <dein-context>"
+```
+
+Nur Vorschau:
+
+```bash
+cd /home/flow/dev_mk/ansible_mk
+scripts/undeploy_manual_no_operator.sh --dry-run
+```
+
 ## Alternative: direkte Manifeste anwenden
 
 Arbeitsverzeichnis:
