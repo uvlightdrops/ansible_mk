@@ -21,15 +21,50 @@ escape_sed_replacement() {
   printf '%s' "$1" | sed 's/[&|]/\\&/g'
 }
 
+resolve_ready2apply_manifest() {
+  local manifest="$1"
+  local base_name stem exact pattern
+  base_name="$(basename "$manifest")"
+  stem="${base_name%.yaml}"
+  exact="$REPO_ROOT/k8s/ready2apply/$base_name"
+
+  # 1) Exact match (legacy/no-suffix naming)
+  if [ -f "$exact" ]; then
+    printf '%s\n' "$exact"
+    return 0
+  fi
+
+  # 2) Suffix match (current naming: <name>-<env>.yaml)
+  pattern="$REPO_ROOT/k8s/ready2apply/${stem}-"*.yaml
+  shopt -s nullglob
+  local matches=( $pattern )
+  shopt -u nullglob
+  if [ ${#matches[@]} -eq 0 ]; then
+    return 1
+  fi
+
+  if [ ${#matches[@]} -gt 1 ]; then
+    # Prefer newest file if multiple env variants exist.
+    printf '%s\n' "$(ls -1t "${matches[@]}" | head -n1)"
+    return 0
+  fi
+
+  printf '%s\n' "${matches[0]}"
+  return 0
+}
+
 render_manifest_for_apply() {
   local manifest="$1"
-  local ready2apply_path="k8s/ready2apply/$(basename "$manifest")"
+  local resolved_ready2apply_path=""
 
   # If manifest exists in ready2apply/, use that (filled by yaml_config_support)
-  if [ -f "$REPO_ROOT/$ready2apply_path" ]; then
-    cat "$REPO_ROOT/$ready2apply_path"
+  if resolved_ready2apply_path="$(resolve_ready2apply_manifest "$manifest")"; then
+    echo "INFO: using ready2apply manifest: ${resolved_ready2apply_path#$REPO_ROOT/}" >&2
+    cat "$resolved_ready2apply_path"
     return
   fi
+
+  echo "INFO: using overlay manifest: $manifest" >&2
 
   if [ -n "$IMAGE_OVERRIDE" ] && [[ "$manifest" == k8s/overlays/manual/deploy-wls-* ]]; then
     local escaped_image
