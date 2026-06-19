@@ -191,11 +191,21 @@ apply k8s/services-clusterip.yaml
 apply k8s/services-nodeports.yaml
 
 # Deployments last (depend on ConfigMaps + PVC)
-# Minikube SSH profile uses dedicated overlay manifests.
-apply k8s/overlays/minikube/deploy-wls-admin.yaml
-apply k8s/overlays/minikube/deploy-wls-managed-1.yaml
-apply k8s/overlays/minikube/deploy-wls-managed-2.yaml
-apply k8s/overlays/minikube/deploy-wls-managed-3.yaml
+# Read from ready2apply/ if available (filled by yaml_config_support),
+# otherwise fallback to overlay manifests.
+for manifest in \
+  "k8s/ready2apply/deploy-wls-admin.yaml:k8s/overlays/minikube/deploy-wls-admin.yaml" \
+  "k8s/ready2apply/deploy-wls-managed-1.yaml:k8s/overlays/minikube/deploy-wls-managed-1.yaml" \
+  "k8s/ready2apply/deploy-wls-managed-2.yaml:k8s/overlays/minikube/deploy-wls-managed-2.yaml" \
+  "k8s/ready2apply/deploy-wls-managed-3.yaml:k8s/overlays/minikube/deploy-wls-managed-3.yaml"; do
+  primary="${manifest%%:*}"
+  fallback="${manifest##*:}"
+  if [ -f "$REPO_ROOT/$primary" ]; then
+    apply "$primary"
+  else
+    apply "$fallback"
+  fi
+done
 apply k8s/deploy-test-db.yaml
 
 echo "  All manifests applied."

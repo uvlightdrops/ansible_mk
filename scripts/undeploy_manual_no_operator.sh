@@ -71,6 +71,13 @@ done
 
 read -r -a KC <<<"$KC_CMD"
 
+NODEPORT_SERVICES=(
+  "wls-admin-ssh-nodeport"
+  "wls-managed-1-ssh-nodeport"
+  "wls-managed-2-ssh-nodeport"
+  "wls-managed-3-ssh-nodeport"
+)
+
 MANIFESTS=(
   "k8s/overlays/manual/deploy-wls-managed-3.yaml"
   "k8s/overlays/manual/deploy-wls-managed-2.yaml"
@@ -125,6 +132,35 @@ for manifest in "${MANIFESTS[@]}"; do
   fi
 
   echo "$out"
+done
+
+echo
+echo "==> Checking optional SSH NodePort services"
+for svc in "${NODEPORT_SERVICES[@]}"; do
+  if [ "$DRY_RUN" = "true" ]; then
+    echo "[dry-run] ${KC_CMD} get svc $svc -n $NAMESPACE && ${KC_CMD} delete svc $svc -n $NAMESPACE"
+    continue
+  fi
+
+  if "${KC[@]}" get svc "$svc" -n "$NAMESPACE" >/dev/null 2>&1; then
+    echo "==> Deleting NodePort service $svc"
+    set +e
+    out=$("${KC[@]}" delete svc "$svc" -n "$NAMESPACE" --ignore-not-found=true 2>&1)
+    rc=$?
+    set -e
+    if [ $rc -ne 0 ]; then
+      if echo "$out" | grep -qiE 'forbidden|cannot delete resource|services'; then
+        echo "$out" >&2
+        echo "WARN: No permission to delete service $svc. Continuing." >&2
+        continue
+      fi
+      echo "$out" >&2
+      exit $rc
+    fi
+    echo "$out"
+  else
+    echo "==> NodePort service $svc not present (skip)"
+  fi
 done
 
 if [ "$DELETE_NAMESPACE" = "true" ]; then

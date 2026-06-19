@@ -23,6 +23,13 @@ escape_sed_replacement() {
 
 render_manifest_for_apply() {
   local manifest="$1"
+  local ready2apply_path="k8s/ready2apply/$(basename "$manifest")"
+
+  # If manifest exists in ready2apply/, use that (filled by yaml_config_support)
+  if [ -f "$REPO_ROOT/$ready2apply_path" ]; then
+    cat "$REPO_ROOT/$ready2apply_path"
+    return
+  fi
 
   if [ -n "$IMAGE_OVERRIDE" ] && [[ "$manifest" == k8s/overlays/manual/deploy-wls-* ]]; then
     local escaped_image
