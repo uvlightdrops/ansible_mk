@@ -54,20 +54,39 @@ ensure_registry_image_set() {
 
   [ -n "$IMAGE_OVERRIDE" ] && return 0
 
-  for manifest in \
-    "k8s/overlays/manual/deploy-wls-admin.yaml" \
-    "k8s/overlays/manual/deploy-wls-managed-1.yaml" \
-    "k8s/overlays/manual/deploy-wls-managed-2.yaml" \
-    "k8s/overlays/manual/deploy-wls-managed-3.yaml"; do
-    if grep -qE '^\s*image:\s*wls-dev:1\.3\s*$' "$REPO_ROOT/$manifest"; then
-      found_local_tag="true"
+  # If ready2apply/ manifests exist, check those (they are the actual deploy source)
+  local use_ready2apply="true"
+  for base in deploy-wls-admin deploy-wls-managed-1 deploy-wls-managed-2 deploy-wls-managed-3; do
+    if ! ls "$REPO_ROOT/k8s/ready2apply/${base}"*.yaml >/dev/null 2>&1; then
+      use_ready2apply="false"
       break
     fi
   done
 
+  if [ "$use_ready2apply" = "true" ]; then
+    for yaml_file in "$REPO_ROOT/k8s/ready2apply/deploy-wls-"*.yaml; do
+      if grep -qE '^\s*image:\s*wls-dev:[^ ]+\s*$' "$yaml_file"; then
+        found_local_tag="true"
+        break
+      fi
+    done
+  else
+    for manifest in \
+      "k8s/overlays/manual/deploy-wls-admin.yaml" \
+      "k8s/overlays/manual/deploy-wls-managed-1.yaml" \
+      "k8s/overlays/manual/deploy-wls-managed-2.yaml" \
+      "k8s/overlays/manual/deploy-wls-managed-3.yaml"; do
+      if grep -qE '^\s*image:\s*wls-dev:[^ ]+\s*$' "$REPO_ROOT/$manifest"; then
+        found_local_tag="true"
+        break
+      fi
+    done
+  fi
+
   if [ "$found_local_tag" = "true" ]; then
-    echo "ERROR: WLS image is still set to local tag wls-dev:1.3 in manual manifests." >&2
-    echo "       Set an allowed registry image via --image or WLS_IMAGE." >&2
+    echo "ERROR: WLS image is still set to local tag wls-dev:* in manifests." >&2
+    echo "       Set an allowed registry image via --image or WLS_IMAGE," >&2
+    echo "       or regenerate ready2apply/ with the correct registry URL." >&2
     echo "       Example: --image harbor.example.com/team/wls-dev:1.3" >&2
     exit 1
   fi
