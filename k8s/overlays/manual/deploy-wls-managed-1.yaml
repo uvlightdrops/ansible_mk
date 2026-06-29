@@ -33,8 +33,9 @@ spec:
               - ALL
           seccompProfile:
             type: RuntimeDefault
-        # Keep the pod running for ansible/kubectl exec based operations.
-        args: ["sleep", "infinity"]
+        # Override image entrypoint to avoid startup scripts that require chown/root.
+        command: ["sleep"]
+        args: ["infinity"]
         volumeMounts:
         - name: domain-home
           mountPath: /u01/domains

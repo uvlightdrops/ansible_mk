@@ -53,6 +53,37 @@ docker tag oracle/weblogic:14.1.1.0-jdk11-ol8 \
 docker push harbor.example.com/weblogic/wls:14.1.1.0
 ```
 
+### Option C: `docker save`-Archiv mit `skopeo` nach Harbor pushen (dockerloser Zielhost)
+
+Wenn das Manual-Image als Tar vorliegt, z. B. auf USB:
+
+```bash
+cd /home/flow/dev_mk/ansible_mk
+cp scripts/manual_harbor.env.example scripts/manual_harbor.env
+# scripts/manual_harbor.env anpassen (IMAGE_TAR, WLS_IMAGE, optional DEST_CREDS)
+
+scripts/push_to_harbor.sh
+```
+
+Oder ohne Env-Datei direkt:
+
+```bash
+cd /home/flow/dev_mk/ansible_mk
+scripts/push_to_harbor.sh \
+  --tar /media/<user>/<usb>/wls-dev_manual_1.3.tar \
+  --source-image wls-dev:1.3 \
+  --target-image harbor.example.com/<projekt>/wls-dev:1.3 \
+  --dest-creds '<user>:<pass>'
+```
+
+Das Skript verwendet intern:
+
+```bash
+skopeo copy \
+  docker-archive:/media/<user>/<usb>/wls-dev_manual_1.3.tar:wls-dev:1.3 \
+  docker://harbor.example.com/<projekt>/wls-dev:1.3
+```
+
 ---
 
 ## Schritt 3: Verifizieren
@@ -126,6 +157,10 @@ scripts/deploy_manual_harbor.sh \
 
 Hinweis: `--db-image` ist nur noetig, wenn eure Policy auch das Standard-Image `postgres:15` blockiert.
 
+Wichtig: Der Dateiname eines `docker save`-Archivs ist nur Transport-Metadaten. Der Harbor-Name kommt **nicht** vom Tar-Dateinamen, sondern vom Ziel `docker://...` bei `skopeo copy` bzw. `scripts/push_to_harbor.sh --target-image ...`.
+
+Wenn ein Archiv **mehrere Images/Manifeste** enthält, musst du bei `docker-archive:` zusätzlich die Quell-Image-Referenz angeben, z. B. `:wls-dev:1.3`. Genau das macht `scripts/push_to_harbor.sh` automatisch über `--source-image`.
+
 ---
 
 ## Schritt 6: Image Pull Policy
@@ -139,6 +174,12 @@ imagePullPolicy: IfNotPresent  # Use local image if available; fallback to Pull
 # oder:
 imagePullPolicy: Always        # Always pull (safer for CI/CD)
 ```
+
+### Wann den Image-Tag hochsetzen?
+
+- **Ja, Version hochsetzen**, wenn sich der Image-Inhalt geändert hat und das Ergebnis reproduzierbar in Harbor/Kubernetes landen soll.
+- Besonders wichtig bei `imagePullPolicy: IfNotPresent`: Cluster-Nodes können sonst ein altes, gleichnamiges Image aus dem Cache behalten.
+- Für das Repo bedeutet das aktuell typischerweise: lokaler Build `wls-dev:1.3` → bei echter neuer Version z. B. `wls-dev:1.4` bauen, pushen und in den Value-Dateien/Manifests referenzieren.
 
 ---
 

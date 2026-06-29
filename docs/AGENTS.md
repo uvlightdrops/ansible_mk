@@ -100,6 +100,8 @@ python3 prepare_docker_py/cli.py log -m "describe what you changed"
 ## Key Conventions
 
 - **SSH is Minikube-only**: Pod-SSH (`docker` + `~/.ssh/id_ed25519_docker`) gilt nur fuer den Minikube-Dev-Pfad.
+- **Hosted/manual target hosts may not provide Docker**: image build, tag, `docker save`, and registry push happen on the workstation; hosted clusters should consume the final registry tag only
+- **docker-archive + skopeo is the preferred hosted/manual transport**: use `skopeo copy docker-archive:/path/to/archive.tar:wls-dev:1.3 docker://<registry>/<project>/wls-dev:1.3`
 - **NodePorts for SSH (Minikube only)**: 30222 (wls-admin), 30223 (wls-managed-1), 30224 (wls-managed-2), 30225 (wls-managed-3)
 - **Managed Server topology**: `wls-managed-1`, `wls-managed-2` and `wls-managed-3` are separate `StatefulSet`s with one replica each; this gives stable pod names/DNS for manually defined WebLogic server identities
 - **PV hostPath**: `/mnt/weblogic/pv-home`, chowned to uid/gid `1000`; storage class `manual`

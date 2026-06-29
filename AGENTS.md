@@ -21,6 +21,7 @@ This repo provisions a **WebLogic-on-Minikube** dev cluster. Three tooling layer
 - **SSH user in pods**: `docker`; key: `~/.ssh/id_ed25519_docker`
 - **SSH user in dev image**: `weblogic` (password: `weblogic` in dev-only builds)
 - **NodePorts for SSH**: 30222 (wls-admin), 30223 (wls-managed-1), 30224 (wls-managed-2), 30225 (wls-managed-3)
+- **Manual/hosted target hosts may not have Docker installed**: build, tag, export (`docker save`) and push-to-registry happen on the workstation; the target cluster should consume the final registry image only
 
 ```bash
 export MK_PRF=wlcluster
@@ -71,6 +72,18 @@ docker build -t wls-dev:1.3 images/wls-dev --build-arg SSH_PUBKEY="$(cat ~/.ssh/
 minikube -p wlcluster image load wls-dev:1.3
 # Or use the helper (reads PUBKEY, IMAGE_TAG, NAMESPACE env vars):
 bash prepare_docker/build_and_deploy_wls_dev.sh
+```
+
+### 4b. Manual/Hosted image transport
+```bash
+# Build locally, then export the runtime image as tar on the workstation
+./prepare_docker/build_and_deploy_wls_dev.sh --variant base
+./prepare_docker/build_and_deploy_wls_dev.sh --variant manual
+docker save -o /path/to/usb/wls-dev_manual_1.3.tar wls-dev:1.3
+
+# Push to the final registry on a machine with skopeo (Docker not required there)
+skopeo copy docker-archive:/path/to/usb/wls-dev_manual_1.3.tar:wls-dev:1.3 \
+  docker://<registry>/<project>/wls-dev:1.3
 ```
 
 ### 5. Regenerate SSH-Key ConfigMap After Script Changes

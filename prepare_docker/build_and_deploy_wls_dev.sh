@@ -10,18 +10,23 @@ IMAGE_TAG=${IMAGE_TAG:-wls-dev:1.3}
 PUBKEY=${PUBKEY:-${HOME}/.ssh/id_ed25519_docker.pub}
 NAMESPACE=${NAMESPACE:-wl}
 KC_CMD=${KC_CMD:-kubectl}
+VARIANT=${VARIANT:-minikube}   # minikube | manual | base
 
 LOAD_MINIKUBE="false"
 RESTART_WORKLOADS="false"
-SAVE_TAR="/tmp/${IMAGE_TAG}.tgz"
+SAVE_TAR="/tmp/${IMAGE_TAG}.tar"  # LEAVE this as is
 
 usage() {
   cat <<EOF
 Usage: prepare_docker/build_and_deploy_wls_dev.sh [options]
 
 Options:
+  --variant <name>         Image variant to build: base | minikube | manual (default: minikube)
+                            base     – heavy base layer (apt, users, Java) – build once
+                            minikube – SSH + entrypoint; loads into minikube
+                            manual   – slim/strict; no entrypoint; for hosted clusters
   --image-tag <tag>        Image tag (default: wls-dev:1.3)
-  --pubkey <path>          SSH pubkey path (default: ~/.ssh/id_ed25519_docker.pub)
+  --pubkey <path>          SSH pubkey path – only used by minikube variant (default: ~/.ssh/id_ed25519_docker.pub)
   --save-tar <path>        Export built image as docker archive tar
   --load-minikube          Load image into minikube profile
   --restart                Restart WLS workloads after load (or on current KC_CMD)
@@ -31,15 +36,17 @@ Options:
   -h, --help               Show help
 
 Examples:
-  prepare_docker/build_and_deploy_wls_dev.sh
-  prepare_docker/build_and_deploy_wls_dev.sh --save-tar /tmp/wls-dev_1.3.tar
-  prepare_docker/build_and_deploy_wls_dev.sh --load-minikube --restart
-  prepare_docker/build_and_deploy_wls_dev.sh --kc-cmd "kubectl --context mycluster" --restart
+  prepare_docker/build_and_deploy_wls_dev.sh --variant base
+  prepare_docker/build_and_deploy_wls_dev.sh --variant minikube --load-minikube --restart
+  prepare_docker/build_and_deploy_wls_dev.sh --variant manual --save-tar /tmp/wls-dev-manual.tar
+  prepare_docker/build_and_deploy_wls_dev.sh --variant manual --kc-cmd "kubectl --context mycluster" --restart
 EOF
 }
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
+    --variant)
+      VARIANT="$2"; shift 2 ;;
     --image-tag)
       IMAGE_TAG="$2"; shift 2 ;;
     --pubkey)
@@ -70,20 +77,45 @@ if ! command -v docker >/dev/null 2>&1; then
   exit 1
 fi
 
-if [ ! -f "$PUBKEY" ]; then
-  echo "Error: pubkey not found: $PUBKEY" >&2
+# Validate variant
+case "$VARIANT" in
+  base|minikube|manual) ;;
+  *) echo "Error: unknown --variant '$VARIANT'. Use: base | minikube | manual" >&2; exit 1 ;;
+esac
+
+BUILD_CONTEXT="images/wls-dev/$VARIANT"
+if [ ! -f "$BUILD_CONTEXT/Dockerfile" ]; then
+  echo "Error: Dockerfile not found in $BUILD_CONTEXT/" >&2
+  exit 1
+fi
+
+# base variant uses a fixed tag; others use IMAGE_TAG
+if [ "$VARIANT" = "base" ]; then
+  EFFECTIVE_TAG="wls-dev:base"
+else
+  EFFECTIVE_TAG="$IMAGE_TAG"
+fi
+
+# minikube variant needs the pubkey
+if [ "$VARIANT" = "minikube" ] && [ ! -f "$PUBKEY" ]; then
+  echo "Error: pubkey not found: $PUBKEY (required for minikube variant)" >&2
   exit 1
 fi
 
 read -r -a KC <<<"$KC_CMD"
 
-echo "Building image $IMAGE_TAG locally"
-docker build -t "$IMAGE_TAG" images/wls-dev \
-  --build-arg SSH_PUBKEY="$(sed -n '1p' "$PUBKEY")"
+echo "Building variant '$VARIANT' → $EFFECTIVE_TAG (context: $BUILD_CONTEXT)"
+if [ "$VARIANT" = "minikube" ]; then
+  docker build -t "$EFFECTIVE_TAG" "$BUILD_CONTEXT" \
+    --build-arg SSH_PUBKEY="$(sed -n '1p' "$PUBKEY")"
+else
+  docker build -t "$EFFECTIVE_TAG" "$BUILD_CONTEXT"
+fi
+echo "Built: $EFFECTIVE_TAG"
 
 if [ -n "$SAVE_TAR" ]; then
   echo "Saving image archive to $SAVE_TAR"
-  docker save -o "$SAVE_TAR" "$IMAGE_TAG"
+  docker save -o "$SAVE_TAR" "$EFFECTIVE_TAG"
   echo "Archive size:"
   ls -lh "$SAVE_TAR"
 fi
@@ -94,7 +126,7 @@ if [ "$LOAD_MINIKUBE" = "true" ]; then
     exit 1
   fi
   echo "Loading image into minikube profile '$MINIKUBE_PROFILE'"
-  minikube -p "$MINIKUBE_PROFILE" image load "$IMAGE_TAG"
+  minikube -p "$MINIKUBE_PROFILE" image load "$EFFECTIVE_TAG"
 fi
 
 if [ "$RESTART_WORKLOADS" = "true" ]; then
