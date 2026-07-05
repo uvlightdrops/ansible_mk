@@ -13,3 +13,14 @@ resources:
 patches:
   - path: patch-pvc-storageclass.yaml
 
+# Image-Override: Sobald postgres:15 in Harbor liegt, hier eintragen.
+# Kustomize ersetzt dann das Image in deploy-test-db.yaml automatisch.
+# Beispiel:
+#   images:
+#     - name: postgres
+#       newName: harbor.example.com/weblogic/postgres
+#       newTag: "15"
+#
+# Aktuell: postgres:15 wird direkt von Docker Hub gezogen (nur für lokalen Dev!)
+images: []
+

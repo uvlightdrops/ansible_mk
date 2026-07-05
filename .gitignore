@@ -23,3 +23,9 @@ prepare_docker/config.local.sh
 env.py
 env_*
 
+# Secrets – NIEMALS einchecken!
+group_vars/secrets.yml
+*.vault.yml
+.vault_pass
+vault_pass.txt
+

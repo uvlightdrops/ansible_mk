@@ -5,7 +5,7 @@ Dieser Guide zeigt, wie du dein WebLogic Container Image in Harbor vorbereitetes
 ## Voraussetzungen
 
 - Zugriff auf Harbor Registry (z.B. `harbor.example.com`)
-- `skopeo` oder `docker` CLI lokal vorinstalliert
+- `skopeo` CLI lokal vorinstalliert
 - Speichern von Harbor-Credentials für später
 
 ---
@@ -21,36 +21,56 @@ Gehe zu Harbor UI:
 
 ---
 
-## Schritt 2: WebLogic Image in Harbor uploaden
+## Schritt 2: Beliebiges Image in Harbor hochladen (mit skopeo)
 
-### Option A: Mit Skopeo (empfohlen, da du das schon nutzt)
+**Wir nutzen `skopeo` — kein Docker, kein Root, kein lokaler Download nötig!**
+`skopeo copy` überträgt direkt Registry → Registry (stream-basiert).
+
+### Variante A: Script (empfohlen — liest Credentials aus `secrets.yml`)
 
 ```bash
-# 1. Harbor Login prep (ggf. interaktiv)
-export HARBOR_HOST="harbor.example.com"
-export HARBOR_USER="<dein-username>"
+# Einmalig secrets.yml befüllen:
+#   group_vars/secrets.yml → vault_harbor_* Variablen setzen
 
-# 2. Image hochladen (mit Authentifizierung)
-skopeo copy docker://oracle/weblogic:14.1.1.0-jdk11-ol8 \
-  docker://$HARBOR_HOST/weblogic/wls:14.1.1.0 \
-  --dest-creds=$HARBOR_USER:$(pass show harbor-password)
+# postgres:15 in Harbor laden:
+bash scripts/harbor_push_image.sh postgres:15
 
-# Oder einfacher: skopeo wird dich dann interaktiv fragen
-skopeo copy docker://oracle/weblogic:14.1.1.0-jdk11-ol8 \
-  docker://$HARBOR_HOST/weblogic/wls:14.1.1.0
+# WebLogic Image laden:
+bash scripts/harbor_push_image.sh oracle/weblogic:14.1.1.0-jdk17-ol8
 ```
 
-### Option B: Mit Docker (falls lokal vorhanden)
+Das Script gibt am Ende direkt den passenden **Kustomize-Snippet** aus:
+```yaml
+images:
+  - name: postgres
+    newName: harbor.example.com/weblogic/postgres
+    newTag: "15"
+```
+→ Diesen in `k8s/overlays/manual/kustomization.yaml` unter `images:` eintragen.
+
+### Variante B: Manuell mit skopeo
 
 ```bash
-# 1. Docker Login
-docker login harbor.example.com
+export HARBOR_HOST="harbor.CHANGEME.example.com"
+export HARBOR_USER="dein_username"
+export HARBOR_PASS="dein_passwort"
 
-# 2. Tag und Push
-docker tag oracle/weblogic:14.1.1.0-jdk11-ol8 \
-  harbor.example.com/weblogic/wls:14.1.1.0
+# Direkt von Docker Hub → Harbor (kein lokaler Speicher!)
+skopeo copy \
+  docker://postgres:15 \
+  docker://${HARBOR_HOST}/weblogic/postgres:15 \
+  --dest-creds="${HARBOR_USER}:${HARBOR_PASS}"
 
-docker push harbor.example.com/weblogic/wls:14.1.1.0
+# WebLogic Image:
+skopeo copy \
+  docker://oracle/weblogic:14.1.1.0-jdk17-ol8 \
+  docker://${HARBOR_HOST}/weblogic/wls:14.1.1.0-jdk17 \
+  --dest-creds="${HARBOR_USER}:${HARBOR_PASS}"
+
+# Überprüfen:
+skopeo inspect \
+  docker://${HARBOR_HOST}/weblogic/postgres:15 \
+  --creds="${HARBOR_USER}:${HARBOR_PASS}"
 ```
 
 ### Option C: `docker save`-Archiv mit `skopeo` nach Harbor pushen (dockerloser Zielhost)
@@ -118,18 +138,18 @@ kubectl get secret wls-image-secret -n wl -o jsonpath='{.data.*}' | base64 -d | 
 
 ---
 
-## Schritt 5: WebLogic Image-Name in Ansible konfigurieren
+## Schritt 5: WebLogic Image-Name konfigurieren
 
-Editiere `group_vars/all.yml`:
+Editiere `group_vars/secrets.yml`:
 
 ```yaml
-weblogic_image: "harbor.example.com/weblogic/wls:14.1.1.0"
+vault_weblogic_image: "harbor.example.com/weblogic/wls:14.1.1.0-jdk17"
 ```
 
 Falls du einen privaten Namespace nutzen möchtest:
 
 ```yaml
-weblogic_image: "harbor.example.com/mycompany/weblogic/wls:14.1.1.0"
+vault_weblogic_image: "harbor.example.com/mycompany/weblogic/wls:14.1.1.0-jdk17"
 ```
 
 ---
@@ -202,9 +222,10 @@ echo -n "user:password" | base64
 # 3. Image-URL prüfen
 kubectl get secret wls-image-secret -n wl -o jsonpath='{.data.\.dockercfg}' | base64 -d | jq '.auths'
 
-# 4. Manuelles Login testen
-docker login harbor.example.com
-docker pull harbor.example.com/weblogic/wls:14.1.1.0
+# 4. Zugriff auf Image testen (ohne Docker)
+skopeo inspect \
+  docker://harbor.example.com/weblogic/wls:14.1.1.0 \
+  --creds="${HARBOR_USER}:${HARBOR_PASSWORD}"
 ```
 
 ### Secret nach dem erstellen aktualisieren
@@ -229,12 +250,12 @@ kubectl rollout restart statefulset/wls-managed-1 -n wl
 ## Checkliste für diesen Schritt
 
 - [ ] Harbor Project `weblogic` erstellt
-- [ ] WebLogic Image zu Harbor gepusht (mit `skopeo` oder `docker`)
-- [ ] Image-Name und Tag notiert: `harbor.example.com/weblogic/wls:14.1.1.0`
-- [ ] ImagePullSecret `wls-image-secret` in Namespace `wl` erstellt
+- [ ] WebLogic Image zu Harbor gepusht (mit `skopeo`)
+- [ ] Image-Name und Tag notiert: `harbor.example.com/weblogic/wls:14.1.1.0-jdk17`
+- [ ] ImagePullSecret `wls-image-secret` in Namespace `weblogic` erstellt
 - [ ] Credentials im Secret geprüft + verifiziert
-- [ ] `weblogic_image` in `group_vars/all.yml` aktualisiert
-- [ ] Lokal getestet: `docker pull <image>` mit Credentials aus dem Secret
+- [ ] `vault_weblogic_image` in `group_vars/secrets.yml` aktualisiert
+- [ ] Image-Zugriff getestet: `skopeo inspect docker://<image> --creds="user:pass"`
 
 ---
 
@@ -260,4 +281,3 @@ ansible-playbook k8s_weblogic/deploy_weblogic.yml \
 - **Credentials**: Nutze Ansible Vault oder External Secrets statt reiner YAML
 - **Image-Registry**: Verwende private und gesicherte Registries
 - **Secret-Management**: Rotiere Regular Credentials in Harbor
-

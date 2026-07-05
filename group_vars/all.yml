@@ -4,11 +4,24 @@ namespace: wl
 
 # Domain identity
 domain_uid: sample-domain1
-weblogic_admin_user: admin
-weblogic_admin_password: ChangeMe123!   # change or store in Ansible Vault
 
-# Image: replace with your WebLogic image (private registry or local)
-weblogic_image: REPLACE_WITH_YOUR_WLS_IMAGE
+# Credentials kommen aus group_vars/secrets.yml (gitignored!)
+# Vorlage: group_vars/secrets.yml.example
+weblogic_admin_user:     "{{ vault_weblogic_admin_user }}"
+weblogic_admin_password: "{{ vault_weblogic_admin_password }}"
+
+# Harbor Registry — Werte kommen aus secrets.yml
+harbor_registry: "{{ vault_harbor_registry }}"
+harbor_project:  "{{ vault_harbor_project }}"
+harbor_user:     "{{ vault_harbor_user }}"
+harbor_password: "{{ vault_harbor_password }}"
+
+# Image-URLs — Werte kommen aus secrets.yml
+# Nur für Ansible-Tasks (kubernetes.core.k8s mit definition:) relevant.
+# Für kubectl apply -k (Kustomize-Overlays) → images: Block in kustomization.yaml nutzen!
+weblogic_image: "{{ vault_weblogic_image }}"
+# testdb_image wird NICHT hier gesetzt — Kustomize-Overlay überschreibt das
+# Image in deploy-test-db.yaml via images: Block (siehe k8s/overlays/*/kustomization.yaml)
 
 # -----------------------------------------------------------------------------
 # eip-ansible aligned WebLogic/common variable names
@@ -57,5 +70,4 @@ manage_namespace: true
 apply_operator: true
 create_admin_secret: true
 wait_for_admin: true
-
 

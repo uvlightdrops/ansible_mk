@@ -130,3 +130,23 @@ python3 prepare_docker_py/cli.py log -m "describe what you changed"
 | `docs/HISTORY.md` | Timestamped change log (append via CLI) |
 | `docs/WEBLOGIC_DEPLOYMENT.md` | Full deployment walkthrough + troubleshooting |
 
+---
+
+## Execution Model: Dev Host vs. Prod Cluster
+
+Wichtige Betriebsregel für dieses Repo:
+
+- **Dev-Host (Control Node)**: volle Toolchain verfügbar (z. B. `ansible`, `skopeo`, optional `docker/podman`, `kubectl`).
+- **Prod-Ziel**: Firmen-Kubernetes-Cluster mit eingeschränkten Rechten/Tools (oft kein Installieren zusätzlicher Pakete, kein Root, kein Docker).
+
+### Konsequenzen
+
+1. **Ansible läuft vom Dev-Host aus** (`connection: local`), nicht im Cluster.
+2. **Image-Transfers** (Docker Hub → Harbor) erfolgen auf dem Dev-Host, bevorzugt mit `skopeo`.
+3. **Cluster-seitig** nur `kubectl`/RBAC-konforme Operationen (Secrets, Deployments, CRs sofern erlaubt).
+4. Falls CRDs/Cluster-Scopes nötig sind, muss das Plattform-/Admin-Team diese bereitstellen.
+
+### Praktische Leitlinie
+
+- Alles, was Tooling braucht, passiert auf dem Dev-Host.
+- Das Prod-Cluster bleibt "thin target" (nur konsumiert Manifeste/Images).
