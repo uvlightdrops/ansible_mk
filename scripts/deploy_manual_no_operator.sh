@@ -1,306 +1,267 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Deploy WebLogic resources without Operator/Domain CR.
-# Applies manifests in a fixed order.
+SCRIPT_NAME="$(basename "$0")"
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-
-NAMESPACE="wl"
-KC_CMD="${KC_CMD:-kubectl}"
+# Defaults
+OVERLAY_REL="k8s/overlays/manual"
+OUT_DIR_REL="ready2apply"
+OUT_FILE_NAME="manual-no-operator.rendered.yaml"
+MODE="render-apply"           # render | apply | render-apply
+RENDERER="auto"               # auto | kustomize | kubectl
 DRY_RUN="false"
-CREATE_NAMESPACE="false"
-APPLY_PV="false"
-SKIP_PVC="false"
-PVC_STORAGE_CLASS=""
-IMAGE_OVERRIDE="${WLS_IMAGE:-}"
-DB_IMAGE_OVERRIDE="${DB_IMAGE:-}"
-
-escape_sed_replacement() {
-  printf '%s' "$1" | sed 's/[&|]/\\&/g'
-}
-
-resolve_ready2apply_manifest() {
-  local manifest="$1"
-  local base_name stem exact pattern
-  base_name="$(basename "$manifest")"
-  stem="${base_name%.yaml}"
-  exact="$REPO_ROOT/k8s/ready2apply/$base_name"
-
-  # 1) Exact match (legacy/no-suffix naming)
-  if [ -f "$exact" ]; then
-    printf '%s\n' "$exact"
-    return 0
-  fi
-
-  # 2) Suffix match (current naming: <name>-<env>.yaml)
-  pattern="$REPO_ROOT/k8s/ready2apply/${stem}-"*.yaml
-  shopt -s nullglob
-  local matches=( $pattern )
-  shopt -u nullglob
-  if [ ${#matches[@]} -eq 0 ]; then
-    return 1
-  fi
-
-  if [ ${#matches[@]} -gt 1 ]; then
-    # Prefer newest file if multiple env variants exist.
-    printf '%s\n' "$(ls -1t "${matches[@]}" | head -n1)"
-    return 0
-  fi
-
-  printf '%s\n' "${matches[0]}"
-  return 0
-}
-
-render_manifest_for_apply() {
-  local manifest="$1"
-  local resolved_ready2apply_path=""
-
-  # If manifest exists in ready2apply/, use that (filled by yaml_config_support)
-  if resolved_ready2apply_path="$(resolve_ready2apply_manifest "$manifest")"; then
-    echo "INFO: using ready2apply manifest: ${resolved_ready2apply_path#$REPO_ROOT/}" >&2
-    cat "$resolved_ready2apply_path"
-    return
-  fi
-
-  echo "INFO: using overlay manifest: $manifest" >&2
-
-  if [ -n "$IMAGE_OVERRIDE" ] && [[ "$manifest" == k8s/overlays/manual/deploy-wls-* ]]; then
-    local escaped_image
-    escaped_image="$(escape_sed_replacement "$IMAGE_OVERRIDE")"
-    sed "s|image: wls-dev:1.3|image: ${escaped_image}|g" "$REPO_ROOT/$manifest"
-    return
-  fi
-
-  if [ -n "$DB_IMAGE_OVERRIDE" ] && [ "$manifest" = "k8s/deploy-test-db.yaml" ]; then
-    local escaped_db_image
-    escaped_db_image="$(escape_sed_replacement "$DB_IMAGE_OVERRIDE")"
-    sed "s|image: postgres:15|image: ${escaped_db_image}|g" "$REPO_ROOT/$manifest"
-    return
-  fi
-
-  cat "$REPO_ROOT/$manifest"
-}
-
-ensure_registry_image_set() {
-  local found_local_tag="false"
-  local manifest
-
-  [ -n "$IMAGE_OVERRIDE" ] && return 0
-
-  # If ready2apply/ manifests exist, check those (they are the actual deploy source)
-  local use_ready2apply="true"
-  for base in deploy-wls-admin deploy-wls-managed-1 deploy-wls-managed-2 deploy-wls-managed-3; do
-    if ! ls "$REPO_ROOT/k8s/ready2apply/${base}"*.yaml >/dev/null 2>&1; then
-      use_ready2apply="false"
-      break
-    fi
-  done
-
-  if [ "$use_ready2apply" = "true" ]; then
-    for yaml_file in "$REPO_ROOT/k8s/ready2apply/deploy-wls-"*.yaml; do
-      if grep -qE '^\s*image:\s*wls-dev:[^ ]+\s*$' "$yaml_file"; then
-        found_local_tag="true"
-        break
-      fi
-    done
-  else
-    for manifest in \
-      "k8s/overlays/manual/deploy-wls-admin.yaml" \
-      "k8s/overlays/manual/deploy-wls-managed-1.yaml" \
-      "k8s/overlays/manual/deploy-wls-managed-2.yaml" \
-      "k8s/overlays/manual/deploy-wls-managed-3.yaml"; do
-      if grep -qE '^\s*image:\s*wls-dev:[^ ]+\s*$' "$REPO_ROOT/$manifest"; then
-        found_local_tag="true"
-        break
-      fi
-    done
-  fi
-
-  if [ "$found_local_tag" = "true" ]; then
-    echo "ERROR: WLS image is still set to local tag wls-dev:* in manifests." >&2
-    echo "       Set an allowed registry image via --image or WLS_IMAGE," >&2
-    echo "       or regenerate ready2apply/ with the correct registry URL." >&2
-    echo "       Example: --image harbor.example.com/team/wls-dev:1.3" >&2
-    exit 1
-  fi
-}
+SHOW_DIFF="false"
 
 usage() {
   cat <<'EOF'
-Usage: scripts/deploy_manual_no_operator.sh [options]
+Deploy manual no-operator manifests.
+
+Usage:
+  scripts/deploy_manual_no_operator.sh [OPTIONS] [overlay_dir] [out_dir]
 
 Options:
-  -n, --namespace <ns>      Namespace (default: wl)
-      --kc-cmd <cmd>        kubectl command (default: $KC_CMD or kubectl)
-      --image <ref>         Override image in manual WLS manifests
-                             (or set env var WLS_IMAGE)
-      --db-image <ref>      Override image in test-db manifest
-                             (or set env var DB_IMAGE)
-      --dry-run             Use kubectl apply --dry-run=client
-      --create-namespace    Create namespace if missing (uses --namespace value)
-      --with-pv             Also apply cluster-scoped PV manifest (k8s/pv.yaml)
-      --skip-pvc            Skip namespace-scoped PVC manifest (k8s/pvc-weblogic-home.yaml)
-      --pvc-storage-class   Patch pvc-weblogic-home to use this StorageClass
-  -h, --help                Show help
+  --overlay <path>       Overlay directory (default: k8s/overlays/manual)
+  --out-dir <path>       Output directory for rendered YAML (default: ready2apply)
+  --out-file <name|path> Output file name (or absolute path)
+  --mode <mode>          render | apply | render-apply (default: render-apply)
+  --renderer <type>      auto | kustomize | kubectl (default: auto)
+  --render-only          Shortcut for: --mode render
+  --apply-only           Shortcut for: --mode apply
+  --dry-run              Apply with kubectl --dry-run=client
+  --diff                 Run kubectl diff -f <file> before apply
+  -h, --help             Show this help
 
-Examples:
-  scripts/deploy_manual_no_operator.sh
-  scripts/deploy_manual_no_operator.sh -n wl --kc-cmd "kubectl --context mycluster"
-  scripts/deploy_manual_no_operator.sh --image harbor.example.com/team/wls-dev:1.3
-  scripts/deploy_manual_no_operator.sh --image harbor.example.com/team/wls-dev:1.3 --db-image harbor.example.com/team/postgres:15
-  scripts/deploy_manual_no_operator.sh --with-pv
-  scripts/deploy_manual_no_operator.sh --skip-pvc
-  scripts/deploy_manual_no_operator.sh --create-namespace --with-pv --pvc-storage-class metro-nas
-  scripts/deploy_manual_no_operator.sh --dry-run
+Backward compatibility:
+  positional #1: overlay_dir
+  positional #2: out_dir
+
+Notes:
+  - Rendered output is never written into k8s/ source directories.
+  - If RENDER_ONLY=true is set, mode is forced to "render".
 EOF
 }
 
-while [ "$#" -gt 0 ]; do
+log() {
+  printf '[%s] %s\n' "$SCRIPT_NAME" "$*"
+}
+
+die() {
+  printf '[%s] ERROR: %s\n' "$SCRIPT_NAME" "$*" >&2
+  exit 1
+}
+
+require_cmd() {
+  command -v "$1" >/dev/null 2>&1 || die "Command not found: $1"
+}
+
+resolve_path() {
+  local candidate="$1"
+  if [[ "$candidate" = /* ]]; then
+    printf '%s\n' "$candidate"
+  else
+    printf '%s/%s\n' "$REPO_ROOT" "$candidate"
+  fi
+}
+
+resolve_renderer() {
+  case "$RENDERER" in
+    kustomize)
+      require_cmd kustomize
+      printf 'kustomize\n'
+      ;;
+    kubectl)
+      require_cmd kubectl
+      printf 'kubectl\n'
+      ;;
+    auto)
+      if command -v kustomize >/dev/null 2>&1; then
+        printf 'kustomize\n'
+      elif command -v kubectl >/dev/null 2>&1; then
+        printf 'kubectl\n'
+      else
+        die "Neither 'kustomize' nor 'kubectl' is available on this host."
+      fi
+      ;;
+    *)
+      die "Invalid renderer: $RENDERER"
+      ;;
+  esac
+}
+
+run_build() {
+  local overlay_dir="$1"
+  local renderer_resolved="$2"
+
+  if [[ "$renderer_resolved" == "kustomize" ]]; then
+    kustomize build "$overlay_dir"
+  else
+    kubectl kustomize "$overlay_dir"
+  fi
+}
+
+run_diff() {
+  local manifest_file="$1"
+
+  require_cmd kubectl
+  # kubectl diff returns:
+  # 0 = no diff, 1 = diff found, >1 = error
+  set +e
+  kubectl diff -f "$manifest_file"
+  local rc=$?
+  set -e
+
+  if [[ $rc -gt 1 ]]; then
+    die "kubectl diff failed with exit code $rc"
+  fi
+}
+
+run_apply() {
+  local manifest_file="$1"
+
+  require_cmd kubectl
+
+  if [[ "$DRY_RUN" == "true" ]]; then
+    kubectl apply --dry-run=client -f "$manifest_file"
+  else
+    kubectl apply -f "$manifest_file"
+  fi
+}
+
+# Parse CLI args
+POSITIONAL=()
+while [[ $# -gt 0 ]]; do
   case "$1" in
-    -n|--namespace)
-      NAMESPACE="$2"
-      shift 2
+    --overlay)
+      shift
+      [[ $# -gt 0 ]] || die "Missing value for --overlay"
+      OVERLAY_REL="$1"
       ;;
-    --kc-cmd)
-      KC_CMD="$2"
-      shift 2
+    --out-dir)
+      shift
+      [[ $# -gt 0 ]] || die "Missing value for --out-dir"
+      OUT_DIR_REL="$1"
       ;;
-    --image)
-      IMAGE_OVERRIDE="$2"
-      shift 2
+    --out-file)
+      shift
+      [[ $# -gt 0 ]] || die "Missing value for --out-file"
+      OUT_FILE_NAME="$1"
       ;;
-    --db-image)
-      DB_IMAGE_OVERRIDE="$2"
-      shift 2
+    --mode)
+      shift
+      [[ $# -gt 0 ]] || die "Missing value for --mode"
+      MODE="$1"
+      ;;
+    --renderer)
+      shift
+      [[ $# -gt 0 ]] || die "Missing value for --renderer"
+      RENDERER="$1"
+      ;;
+    --render-only)
+      MODE="render"
+      ;;
+    --apply-only)
+      MODE="apply"
       ;;
     --dry-run)
       DRY_RUN="true"
-      shift 1
       ;;
-    --create-namespace)
-      CREATE_NAMESPACE="true"
-      shift 1
-      ;;
-    --with-pv)
-      APPLY_PV="true"
-      shift 1
-      ;;
-    --skip-pvc)
-      SKIP_PVC="true"
-      shift 1
-      ;;
-    --pvc-storage-class)
-      PVC_STORAGE_CLASS="$2"
-      shift 2
+    --diff)
+      SHOW_DIFF="true"
       ;;
     -h|--help)
       usage
       exit 0
       ;;
+    --)
+      shift
+      while [[ $# -gt 0 ]]; do
+        POSITIONAL+=("$1")
+        shift
+      done
+      break
+      ;;
+    -*)
+      die "Unknown option: $1"
+      ;;
     *)
-      echo "Unknown option: $1" >&2
-      usage
-      exit 1
+      POSITIONAL+=("$1")
       ;;
   esac
+  shift
+
 done
 
-read -r -a KC <<<"$KC_CMD"
-
-ensure_registry_image_set
-
-MANIFESTS=(
-  "k8s/pv.yaml"
-  "k8s/pvc-weblogic-home.yaml"
-  "k8s/services-clusterip.yaml"
-  "k8s/deploy-test-db.yaml"
-  "k8s/overlays/manual/deploy-wls-admin.yaml"
-  "k8s/overlays/manual/deploy-wls-managed-1.yaml"
-  "k8s/overlays/manual/deploy-wls-managed-2.yaml"
-  "k8s/overlays/manual/deploy-wls-managed-3.yaml"
-)
-
-for manifest in "${MANIFESTS[@]}"; do
-  if [ ! -f "$REPO_ROOT/$manifest" ]; then
-    echo "Missing manifest: $manifest" >&2
-    exit 1
-  fi
-done
-
-if [ "$CREATE_NAMESPACE" = "true" ]; then
-  echo "==> Ensuring namespace exists: $NAMESPACE"
-  if [ "$DRY_RUN" = "true" ]; then
-    echo "[dry-run] ${KC_CMD} get namespace $NAMESPACE || ${KC_CMD} create namespace $NAMESPACE"
-  else
-    "${KC[@]}" get namespace "$NAMESPACE" >/dev/null 2>&1 || "${KC[@]}" create namespace "$NAMESPACE"
-  fi
+# Backward compatibility with positional args
+if [[ ${#POSITIONAL[@]} -ge 1 ]]; then
+  OVERLAY_REL="${POSITIONAL[0]}"
+fi
+if [[ ${#POSITIONAL[@]} -ge 2 ]]; then
+  OUT_DIR_REL="${POSITIONAL[1]}"
+fi
+if [[ ${#POSITIONAL[@]} -gt 2 ]]; then
+  die "Too many positional arguments. Use --help for usage."
 fi
 
-echo "Repo root: $REPO_ROOT"
-echo "Namespace: $NAMESPACE"
-echo "kubectl cmd: $KC_CMD"
-echo "Dry run: $DRY_RUN"
-echo "Create namespace: $CREATE_NAMESPACE"
-echo "Apply PV: $APPLY_PV"
-echo "Skip PVC: $SKIP_PVC"
-echo "PVC storageClass patch: ${PVC_STORAGE_CLASS:-<none>}"
-echo "Image override: ${IMAGE_OVERRIDE:-<none>}"
-echo "DB image override: ${DB_IMAGE_OVERRIDE:-<none>}"
-
-echo
-for manifest in "${MANIFESTS[@]}"; do
-
-  if [ "$manifest" = "k8s/pv.yaml" ] && [ "$APPLY_PV" != "true" ]; then
-    echo "==> Skipping $manifest (default behavior; use --with-pv to apply it)"
-    continue
-  fi
-
-  if [ "$manifest" = "k8s/pvc-weblogic-home.yaml" ] && [ "$SKIP_PVC" = "true" ]; then
-    echo "==> Skipping $manifest (--skip-pvc)"
-    continue
-  fi
-
-  echo "==> Applying $manifest"
-  if [ "$DRY_RUN" = "true" ]; then
-    render_manifest_for_apply "$manifest" | "${KC[@]}" apply --dry-run=client -f - -n "$NAMESPACE"
-  else
-    set +e
-    out=$(render_manifest_for_apply "$manifest" | "${KC[@]}" apply -f - -n "$NAMESPACE" 2>&1)
-    rc=$?
-    set -e
-
-    if [ $rc -ne 0 ]; then
-      if [ "$manifest" = "k8s/pv.yaml" ] && echo "$out" | grep -qiE 'forbidden|cannot create resource|persistentvolumes'; then
-        echo "$out" >&2
-        echo "WARN: PV creation forbidden. Continuing without k8s/pv.yaml." >&2
-        echo "      If PVC stays Pending, set --pvc-storage-class <class> or ask platform team for storage." >&2
-        continue
-      fi
-      echo "$out" >&2
-      exit $rc
-    fi
-
-    echo "$out"
-
-    if [ "$manifest" = "k8s/pvc-weblogic-home.yaml" ] && [ -n "$PVC_STORAGE_CLASS" ]; then
-      echo "==> Patching pvc-weblogic-home storageClassName=$PVC_STORAGE_CLASS"
-      "${KC[@]}" patch pvc pvc-weblogic-home -n "$NAMESPACE" --type merge \
-        -p "{\"spec\":{\"storageClassName\":\"$PVC_STORAGE_CLASS\"}}"
-    fi
-  fi
-done
-
-if [ "$DRY_RUN" = "true" ]; then
-  echo
-  echo "Dry-run complete. No resources were changed."
-  exit 0
+# Legacy env compatibility
+if [[ "${RENDER_ONLY:-false}" == "true" ]]; then
+  MODE="render"
 fi
 
-echo
-echo "Deployment complete. Current status:"
-"${KC[@]}" get pods -n "$NAMESPACE" -o wide || true
-"${KC[@]}" get svc -n "$NAMESPACE" || true
-"${KC[@]}" get pvc -n "$NAMESPACE" || true
+case "$MODE" in
+  render|apply|render-apply) ;;
+  *) die "Invalid mode: $MODE" ;;
+esac
 
+OVERLAY_DIR="$(resolve_path "$OVERLAY_REL")"
+OUT_DIR="$(resolve_path "$OUT_DIR_REL")"
+
+if [[ "$OUT_FILE_NAME" = /* ]]; then
+  OUT_FILE="$OUT_FILE_NAME"
+else
+  OUT_FILE="$OUT_DIR/$OUT_FILE_NAME"
+fi
+
+if [[ ! -f "$OVERLAY_DIR/kustomization.yaml" ]]; then
+  die "No kustomization.yaml found in: $OVERLAY_DIR"
+fi
+
+mkdir -p "$OUT_DIR"
+
+log "mode=$MODE"
+log "overlay=$OVERLAY_DIR"
+log "output=$OUT_FILE"
+
+if [[ "$MODE" == "render" || "$MODE" == "render-apply" ]]; then
+  RENDERER_RESOLVED="$(resolve_renderer)"
+  log "renderer=$RENDERER_RESOLVED"
+
+  TMP_OUT="$OUT_FILE.tmp"
+  run_build "$OVERLAY_DIR" "$RENDERER_RESOLVED" > "$TMP_OUT"
+
+  if [[ ! -s "$TMP_OUT" ]]; then
+    rm -f "$TMP_OUT"
+    die "Rendered manifest is empty: $TMP_OUT"
+  fi
+
+  mv "$TMP_OUT" "$OUT_FILE"
+  log "rendered=$OUT_FILE"
+fi
+
+if [[ "$MODE" == "apply" || "$MODE" == "render-apply" ]]; then
+  [[ -f "$OUT_FILE" ]] || die "Cannot apply; rendered manifest not found: $OUT_FILE"
+
+  if [[ "$SHOW_DIFF" == "true" ]]; then
+    log "running kubectl diff"
+    run_diff "$OUT_FILE"
+  fi
+
+  if [[ "$DRY_RUN" == "true" ]]; then
+    log "applying with dry-run=client"
+  else
+    log "applying manifest"
+  fi
+
+  run_apply "$OUT_FILE"
+  log "done"
+fi

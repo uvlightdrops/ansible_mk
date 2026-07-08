@@ -21,6 +21,8 @@ k8s/ready2apply/*.yaml
 inventory.yaml
 prepare_docker/config.local.sh
 env.py
+env.yaml
+env.yml
 env_*
 
 # Secrets – NIEMALS einchecken!
@@ -29,3 +31,5 @@ group_vars/secrets.yml
 .vault_pass
 vault_pass.txt
 
+# generated manifests (can contain resolved credentials)
+ready2apply/

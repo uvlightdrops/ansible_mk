@@ -35,7 +35,7 @@ spec:
             type: RuntimeDefault
         # Override image entrypoint to avoid startup scripts that require chown/root.
         command: ["sleep"]
-        args: ["infinity]
+        args: ["infinity"]
         volumeMounts:
         - name: domain-home
           mountPath: /u01/domains

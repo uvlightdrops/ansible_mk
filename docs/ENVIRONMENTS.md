@@ -131,6 +131,17 @@ cd /home/flow/dev_mk/ansible_mk
 ansible-playbook k8s_weblogic/deploy_weblogic.yml -e @group_vars/env_manual.yml
 ```
 
+Alternative ohne Ansible (nur render + apply):
+
+```bash
+cd /home/flow/dev_mk/ansible_mk
+RENDER_ONLY=true bash scripts/deploy_manual_no_operator.sh
+# Output: ready2apply/manual-no-operator.rendered.yaml
+
+# Wenn Rendering OK, dann anwenden:
+bash scripts/deploy_manual_no_operator.sh
+```
+
 ## Was du vor dem ersten Hosted-Deployment anpassen musst
 
 In `group_vars/env_hosted.yml`:
@@ -148,4 +159,3 @@ In `k8s/overlays/hosted/patch-pvc-storageclass.yaml`:
 2. Namespace aus dem Plattform-Team übernehmen
 3. Klären, ob der WebLogic Operator zentral betrieben wird
 4. Danach optional ein drittes Overlay ergänzen, z. B. `k8s/overlays/staging/`
-
